@@ -31,6 +31,12 @@ Assume the project uses these folders when present:
 
 Treat `CODEX.md` as the highest-level runtime guide. If the project still has `CLAUDE.md`, use it as reference only unless the user explicitly says the project is still Claude-driven.
 
+If present, also load:
+
+- `ARC-BOUNDARY-CHECKLIST.md` for arc-end work
+- `settings/07-periodic.md` for periodic review cadence
+- `batch-supervisor-audit.md` when the task is audit-oriented
+
 ## Core Workflow
 
 ### 1. Load context
@@ -58,6 +64,12 @@ Map the task to one of these roles:
 
 Do not recreate the full Claude agent matrix. Use the smallest role set that covers the task.
 
+For audit or arc-end work, the minimum role bundle is usually:
+
+- `continuity-reviewer`
+- `plot-checker`
+- `korean-reviewer`
+
 ### 3. Write or review
 
 For writing:
@@ -73,6 +85,8 @@ For review:
 - check continuity first
 - then Korean naturalness
 - then narrative function and repeated patterns
+- then WHY/HOW and motivation-action gaps when relevant
+- at arc boundaries, follow `ARC-BOUNDARY-CHECKLIST.md` in order
 
 ### 4. Update project state
 
@@ -91,6 +105,12 @@ Update these only if relevant:
 - `plot/foreshadowing.md`
 
 If a major action is completed, append one line to `summaries/action-log.md`.
+
+If the task crosses a 5-episode boundary or arc boundary:
+
+- update `summaries/review-log.md`
+- update `summaries/repetition-watchlist.md` when repetition patterns are found
+- make next-arc runway explicit in `summaries/running-context.md`
 
 ## Local Tools
 
@@ -131,3 +151,4 @@ When migrating from a Claude project:
 - do not assume `.claude/agents/*.md` are executable in Codex
 - do not bulk-read the whole project when `compile-brief` and targeted reads are enough
 - do not change plot or summaries casually during review-only tasks
+- do not stop at a vague "looks fine" when the task is audit or arc-boundary review; classify findings into patch-feasible vs HOLD

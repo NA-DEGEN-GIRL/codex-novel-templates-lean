@@ -37,6 +37,7 @@ Read these first:
 1. `batch-supervisor.md`
 2. `CODEX.md`
 3. `settings/07-periodic.md`
+4. `ARC-BOUNDARY-CHECKLIST.md`
 4. `plot/arc-XX.md` for the current episode when needed
 
 Only read more if blocked.
@@ -61,6 +62,7 @@ When the writer is ready for the next episode:
 
 - send the episode prompt
 - require context loading via `scripts/compile-brief`
+- determine and inject the correct review floor
 - require summary updates
 - require action-log append
 
@@ -78,10 +80,13 @@ If one is missing, do not advance blindly.
 
 At arc boundaries, require:
 
-- completed arc review
-- plot-gap or motivation-gap check
+- completed arc re-read
+- WHY/HOW and motivation-action gap check
+- POV / era / scene-logic check
+- repetition and Korean naturalness check
 - minimal patching or HOLD classification
 - next arc readiness check
+- review-log and action-log updates
 
 ### 5. Keep the pipeline Codex-only
 
@@ -114,6 +119,12 @@ If the session crashed:
 - recreate the tmux session
 - determine the last completed episode from files, not memory
 - resume from the next unfinished episode
+
+If the writer finished the last episode of an arc but stopped before the checklist:
+
+- do not advance
+- send the arc-boundary audit prompt
+- verify `review-log.md` and next-arc runway before marking complete
 
 ## Constraint
 

@@ -1,103 +1,120 @@
 # Codex Novel Templates -- Lean Edition
 
-Codex 중심으로 한국어 웹소설 프로젝트를 운영하기 위한 경량 템플릿.
+Codex 중심으로 한국어 웹소설 프로젝트를 운영하기 위한 템플릿.
 
-이 레포는 `claude-novel-templates-lean`의 소설 구조와 집필 습관을 유지하면서, Claude 전용 런타임 의존성을 제거하고 Codex에서 바로 쓸 수 있는 형태로 얇게 재구성한 시작점이다.
+이 레포는 이제 단순한 "얇은 포팅본"이 아니라, `claude-novel-templates-lean`의 집필/정기 점검/아크 경계 감사 습관을 Codex 방식으로 재구성한 운영 베이스다.
 
 ## What This Is
 
 - 한국어 웹소설용 프로젝트 스캐폴드
 - Codex 기준 운영 문서 세트
-- `compile_brief`, `novel-calc`, `novel-hanja`를 로컬에서 호출할 수 있는 래퍼 포함
-- Claude 프로젝트를 Codex 프로젝트로 옮기기 위한 마이그레이션 프롬프트 포함
+- Codex-only self-review / audit / supervisor workflow
+- `compile_brief`, `novel-calc`, `novel-hanja`를 로컬에서 호출하는 래퍼 포함
+- Claude 프로젝트를 Codex 프로젝트로 옮기는 마이그레이션 프롬프트 포함
 
 ## What This Is Not
 
-- Claude `.claude/commands` 체계의 1:1 복제품
+- Claude `.claude/commands`의 1:1 복제품
 - 외부 AI 리뷰를 기본 전제로 하는 파이프라인
-- 완성형 자동 집필 플랫폼
+- 거대한 MCP 생태계를 먼저 가정하는 플랫폼
 
-기본 원칙은 단순하다. 먼저 Codex에서 실제로 굴러가는 최소 집필 템플릿을 만들고, 반복 비용이 큰 부분만 나중에 자동화한다.
+기본 철학은 유지한다. Codex에서 실제로 굴러가게 만들고, 그 위에 품질 게이트를 얹는다.
 
 ## Design Principles
 
-1. `settings/`, `plot/`, `summaries/`, `chapters/` 구조는 최대한 유지한다.
-2. 외부 AI 참고는 기본 파이프라인에서 제외한다. Codex 단독 운영이 기본값이다.
-3. Claude 전용 에이전트 파일 대신 Codex용 운영 문서와 역할 맵으로 치환한다.
-4. MCP 직접 연결이 없어도 로컬 래퍼로 핵심 기능을 쓸 수 있어야 한다.
-5. 기능 확장보다 먼저 "다음 화를 쓸 수 있는 상태"를 확보한다.
+1. `settings/`, `plot/`, `summaries/`, `chapters/` 구조는 유지한다.
+2. 집필뿐 아니라 정기 점검과 아크 경계 감사까지 Codex 내부에서 닫힌 루프로 돌린다.
+3. 외부 AI는 예외 경로다. 기본 품질 체계는 Codex self-review와 audit 문서로 해결한다.
+4. Claude 전용 agent matrix는 복제하지 않고, Codex 역할과 체크리스트로 압축한다.
+5. supervisor와 auditor가 파일 기반으로 완료를 검증하도록 설계한다.
+
+## What's New In The Upgraded Lean
+
+이전 Codex lean이 "다음 화를 쓸 수 있는 최소 상태"였다면, 현재 버전은 아래를 추가로 보장한다.
+
+- `CODEX.md`에 상세한 운영 헌법, review floors, 금지 규칙, EPISODE_META 규약
+- [ARC-BOUNDARY-CHECKLIST.md](/root/novel/codex-novel-templates-lean/ARC-BOUNDARY-CHECKLIST.md)로 아크 경계 감사 강제
+- [batch-supervisor.md](/root/novel/codex-novel-templates-lean/batch-supervisor.md)의 강화된 review floor / completion check
+- [batch-supervisor-audit.md](/root/novel/codex-novel-templates-lean/batch-supervisor-audit.md)로 기존 원고 감사 감독
+- `settings/07-periodic.md`의 Codex 전용 정기 점검 스택
+
+즉, Claude lean 대비 가장 약했던 "감사 절차 누락"을 메운 버전이다.
 
 ## Repository Layout
 
 - `CODEX.md`
   - Codex용 최상위 운영 규약
-- `INIT-PROMPT.md`
-  - 새 프로젝트 생성용 시작 프롬프트
-- `MIGRATION-CLAUDE-TO-CODEX.md`
-  - 기존 Claude 프로젝트를 Codex 방식으로 옮기는 프롬프트
-- `AGENT-MAP.md`
-  - Claude 역할을 Codex 역할로 압축한 매핑표
+- `ARC-BOUNDARY-CHECKLIST.md`
+  - 아크 종료 후 필수 감사 절차
 - `batch-supervisor.md`
-  - Codex writer 세션을 tmux로 감독하는 배치 운영 문서
-- `skills/codex-novel-lean/SKILL.md`
-  - Codex에서 이 템플릿 작업을 트리거하기 위한 skill 정의
-- `skills/codex-batch-supervisor/SKILL.md`
-  - tmux 기반 배치 집필 감독용 skill 정의
-- `settings/`, `plot/`, `summaries/`, `chapters/`, `reference/`
-  - Lean 템플릿의 소설 구조 자산
-- `compile_brief.py`
-  - 집필용 압축 브리프 생성기
+  - tmux writer 감독 문서
+- `batch-supervisor-audit.md`
+  - tmux auditor 감독 문서
+- `INIT-PROMPT.md`
+  - 새 프로젝트 시작 프롬프트
+- `MIGRATION-CLAUDE-TO-CODEX.md`
+  - Claude 프로젝트 마이그레이션 프롬프트
+- `AGENT-MAP.md`
+  - Claude 역할을 Codex 역할로 매핑
+- `skills/`
+  - Codex용 skill 정의
 - `scripts/`
-  - `compile-brief`, `novel-calc`, `novel-hanja` 로컬 래퍼
+  - `compile-brief`, `novel-calc`, `novel-hanja`
+  - `run-codex-writer`, `run-codex-supervisor`, `run-codex-auditor`
+- `settings/`, `plot/`, `summaries/`, `chapters/`, `reference/`
+  - 소설 자산 구조
 
-## Current Workflow
+## Workflow
 
-Codex lean의 기본 흐름은 아래다.
+기본 집필 흐름:
 
-1. `compile_brief` 또는 폴백 파일 읽기로 맥락 로드
-2. 이번 화의 기능, 장면 개요, WHY/HOW 질문 정리
-3. 본문 작성
-4. 연속성, 한국어 자연스러움, 서사 기능 점검
-5. `summaries/`와 `plot/foreshadowing.md` 갱신
+1. `scripts/compile-brief`로 맥락 로드
+2. planning flags + WHY/HOW 질문 정리
+3. 초안 작성
+4. review floor에 맞는 self-review
+5. summary / plot / action-log 갱신
 
-필요하면 Codex 서브에이전트를 아래 역할로 나눌 수 있다.
+정기 점검 흐름:
 
-- `writer`
-- `continuity-reviewer`
-- `narrative-reviewer`
-- `korean-reviewer`
-- `plot-checker`
+1. 최근 5화 재독
+2. summary consistency
+3. WHY/HOW + motivation-action gap
+4. POV / era / scene logic
+5. repetition
+6. Korean naturalness
+7. summary 재정합 + 로그
 
-자세한 원칙은 [CODEX.md](/root/novel/codex-novel-templates-lean/CODEX.md)에 있다.
+아크 경계 흐름:
 
-## Included Skill
+1. [ARC-BOUNDARY-CHECKLIST.md](/root/novel/codex-novel-templates-lean/ARC-BOUNDARY-CHECKLIST.md) 수행
+2. patch-feasible 즉시 수정
+3. HOLD 기록
+4. 다음 아크 런웨이 정리
 
-이 레포에는 Codex용 skill 초안도 포함되어 있다.
+## Skills
+
+포함된 skill:
 
 - [skills/codex-novel-lean/SKILL.md](/root/novel/codex-novel-templates-lean/skills/codex-novel-lean/SKILL.md)
 - [skills/codex-batch-supervisor/SKILL.md](/root/novel/codex-novel-templates-lean/skills/codex-batch-supervisor/SKILL.md)
 
-이 skill은 다음 작업을 한 묶음으로 다룬다.
+현재 skill은 아래 작업을 포괄한다.
 
 - 에피소드 집필
-- 요약 갱신
-- 연속성/서사/한국어 검토
-- WHY/HOW 또는 동기 갭 점검
+- 부분 재작성
+- continuity / narrative / Korean review
+- WHY/HOW / motivation-action / OAG 점검
+- tmux batch supervision
 - Claude 프로젝트의 Codex 마이그레이션
 
-즉, 단순 문서 모음이 아니라 Codex가 "언제 이 워크플로를 써야 하는지"까지 명시하는 레이어다.
-
-`batch-supervisor.md`도 같은 원리로 skill화했다. 문서만 읽는 대신, "감독 세션을 맡는 작업" 자체를 별도 trigger로 분리한 셈이다.
-
 ## Supported Local Tools
-
-현재 우선 지원하는 도구는 3개다.
 
 - `scripts/compile-brief`
 - `scripts/novel-calc`
 - `scripts/novel-hanja`
-
-이 스크립트들은 MCP 세션 연결 없이 로컬 import 방식으로 동작한다. 사용 예시는 [scripts/README.md](/root/novel/codex-novel-templates-lean/scripts/README.md)에 정리했다.
+- `scripts/run-codex-writer`
+- `scripts/run-codex-supervisor`
+- `scripts/run-codex-auditor`
 
 예시:
 
@@ -105,38 +122,39 @@ Codex lean의 기본 흐름은 아래다.
 scripts/compile-brief /root/novel/no-title-001-gpt 7
 scripts/novel-calc calculate expression='1250 * 1.35'
 scripts/novel-hanja hanja_lookup text='天外歸還'
+scripts/run-codex-writer
 ```
 
 ## Quick Start
 
-새 프로젝트를 만들 때:
+새 프로젝트:
 
 1. 이 레포를 복사한다.
-2. Codex에서 [INIT-PROMPT.md](/root/novel/codex-novel-templates-lean/INIT-PROMPT.md)의 프롬프트를 사용한다.
-3. 생성된 프로젝트의 `CODEX.md`, `settings/`, `plot/`을 채운다.
-4. 첫 집필 전 `scripts/compile-brief`로 맥락 로딩이 되는지 확인한다.
+2. `INIT-PROMPT.md`를 기준으로 `CODEX.md`와 `settings/`를 채운다.
+3. `scripts/compile-brief`가 동작하는지 확인한다.
+4. `batch-supervisor.md` 기준으로 writer 세션을 띄운다.
 
-기존 Claude 프로젝트를 옮길 때:
+기존 Claude 프로젝트 마이그레이션:
 
-1. 프로젝트 본문은 건드리지 않는다.
-2. [MIGRATION-CLAUDE-TO-CODEX.md](/root/novel/codex-novel-templates-lean/MIGRATION-CLAUDE-TO-CODEX.md)를 사용해 운영 문서를 이식한다.
-3. Claude 전용 구조를 reference-only로 남기고, Codex가 독립적으로 작업 가능한 상태를 만든다.
+1. 본문은 건드리지 않는다.
+2. `MIGRATION-CLAUDE-TO-CODEX.md`로 운영 문서를 이식한다.
+3. `CLAUDE.md`와 `.claude/`는 reference-only로 남긴다.
+4. 아크 하나를 대상으로 Codex audit를 먼저 돌려 정합성을 확인한다.
 
 ## Scope Decisions
 
-현재 이 레포는 의도적으로 몇 가지를 하지 않는다.
+여전히 일부는 하지 않는다.
 
-- 외부 AI 리뷰 자동화
+- 외부 AI 리뷰 자동화 기본화
 - Claude command 체계 재현
-- 거대한 스킬/MCP 생태계 선구축
+- 초대형 보조 시스템 선구축
 
-이건 빠뜨린 게 아니라 설계 선택이다. Codex에서 먼저 검증해야 할 건 "한 화를 안정적으로 쓰고 갱신할 수 있는가"이지, "모든 보조 시스템이 동시에 붙어 있는가"가 아니다.
+하지만 이제는 하지 않는 것보다, Codex 내부에서 확실히 하는 것이 더 많다.
 
-## Recommended Next Steps
+- review floor 강제
+- periodic check 강제
+- arc-boundary audit 강제
+- batch writing supervision
+- batch audit supervision
 
-1. 이 템플릿으로 빈 실험 프로젝트 하나 생성
-2. 기존 작품 하나를 얕게 마이그레이션
-3. 실제 집필 또는 부분 재작성 테스트
-4. 그 다음에 반복 작업만 자동화
-
-이 순서를 지키는 편이 실제 운영 비용이 가장 낮다.
+이 정도면 Codex lean은 Claude lean의 경량 대체재가 아니라, Codex용 운영 분기라고 볼 수 있다.

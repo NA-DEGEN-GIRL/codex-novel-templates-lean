@@ -1,7 +1,7 @@
 # Continuity Management
 
-> Continuity verification is performed by `.claude/agents/unified-reviewer.md` in continuity mode.
-> Summary file updates are performed inline by the writer immediately after writing (`.claude/agents/writer.md` step D).
+> Continuity verification is performed by the Codex review stack (`continuity-reviewer` first, then other roles as needed).
+> Summary file updates are performed inline by the writer immediately after writing.
 > This file defines EPISODE_META writing rules and per-novel continuity settings.
 
 **Language Contract: All narrative output, summaries, and review text MUST be in Korean.**
@@ -10,7 +10,7 @@
 
 ## EPISODE_META Writing Rules
 
-Write metadata at the end of each episode using the YAML template from CLAUDE.md Section 6. Follow these rules:
+Write metadata at the end of each episode using the YAML template from `CODEX.md` Section 7. Follow these rules:
 
 1. **Record all characters**: Include every named character in `characters_appeared`
 2. **Track state changes**: Injuries, emotional shifts, location changes MUST be recorded — this is the foundation for next-episode continuity
@@ -69,5 +69,6 @@ Write metadata at the end of each episode using the YAML template from CLAUDE.md
 - Write a full summary of the previous part
 - Record character states as a reset point
 - Sort unresolved threads into carry-forward vs. discard for the next part
+- Follow `ARC-BOUNDARY-CHECKLIST.md` for patch-feasible vs HOLD classification
 
 ---
