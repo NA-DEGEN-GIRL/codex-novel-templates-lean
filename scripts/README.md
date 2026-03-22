@@ -1,6 +1,15 @@
 # Codex Utility Scripts
 
-Codex에서 기존 lean의 핵심 도구 일부를 셸 명령처럼 쓰기 위한 로컬 래퍼.
+Codex native MCP가 불가할 때 lean의 핵심 도구 일부를 셸 명령처럼 쓰기 위한 로컬 fallback 래퍼.
+
+현재 lean의 기본 경로는 native MCP다.
+
+- `novel-editor` → `compile_brief`
+- `novel-calc` → 계산/분량 검증
+- `novel-hanja` → 한자 검증
+- `novel-naming` → 표기 변이 점검
+
+`scripts/`는 MCP 미등록, 일시 장애, 로컬 디버깅 상황에서만 쓴다.
 
 ## Available
 
@@ -66,6 +75,7 @@ scripts/run-codex-auditor
 ## Notes
 
 - 이 스크립트들은 MCP 연결 없이 로컬 import 방식으로 동작한다.
+- lean의 기본 경로는 native MCP이고, 이 스크립트는 compatibility fallback이다.
 - `mcp` 파이썬 패키지가 설치되어 있어야 서버 모듈 import가 된다.
 - 경로는 현재 워크스페이스(`/root/novel/...`) 기준으로 고정되어 있다.
 - `run-codex-writer` / `run-codex-supervisor` / `run-codex-auditor`는 승인 프롬프트를 최대한 없애기 위해 `--dangerously-bypass-approvals-and-sandbox`를 사용한다.

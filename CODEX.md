@@ -68,11 +68,12 @@
 
 ### 3.1 Preparation
 
-1. 먼저 `scripts/compile-brief <novel_dir> <episode_number>`를 실행한다.
+1. 먼저 `novel-editor` MCP의 `compile_brief(novel_dir="<novel_dir>", episode_number=<episode_number>)`를 호출한다.
 2. 직전 화 마지막 2~3문단을 확인한다.
 3. 현재 아크의 `plot/arc-XX.md` 또는 `plot/prologue.md`를 확인한다.
 4. 필요 시 `plot/foreshadowing.md`, `summaries/character-tracker.md`, `summaries/promise-tracker.md`를 본다.
 5. review-only 작업이면 필요한 범위만 읽고, 프로젝트 전체를 무의식적으로 훑지 않는다.
+6. MCP가 일시적으로 불가할 때만 `scripts/compile-brief`를 fallback으로 쓴다.
 
 ### 3.2 Planning Gate
 
@@ -95,11 +96,12 @@
 1. `settings/02-episode-structure.md`를 따른다.
 2. `settings/01-style-guide.md`를 따른다.
 3. 목표 분량은 {{TARGET_LENGTH}}를 기준으로 하되, 장면 밀도를 위해 필요한 길이를 확보한다.
-4. `scripts/novel-calc`는 **검증용**이다. 수치를 서사의 엔진처럼 쓰지 않는다.
-5. 무협/역사/한자어 기반 작품이면 `scripts/novel-hanja`를 사용한다. LLM 추정 한자 조립 금지.
+4. `novel-calc` MCP는 **검증용**이다. 수치를 서사의 엔진처럼 쓰지 않는다.
+5. 무협/역사/한자어 기반 작품이면 `novel-hanja` MCP를 사용한다. LLM 추정 한자 조립 금지.
 6. 한자 병기는 첫 등장 또는 재등장 간격이 충분할 때만 쓴다. 이후에는 한국어 표기로 유지한다.
 7. 시대에 맞는 단위/수사/어휘를 쓴다. 비현대 배경이면 아라비아 숫자를 본문에서 피한다.
 8. 각주가 필요하면 `[^N]` 형식을 쓴다.
+9. naming variant 검사가 필요하면 `novel-naming` MCP를 사용한다.
 
 ### 3.4 Review Stack
 
@@ -198,7 +200,8 @@ Codex lean은 Claude lean과 달리 아래를 기본 전제로 하지 않는다.
 대신 아래를 전제로 한다.
 
 - 로컬 파일 읽기
-- `scripts/compile-brief`, `scripts/novel-calc`, `scripts/novel-hanja`
+- Codex native MCP (`novel-editor`, `novel-calc`, `novel-hanja`, `novel-naming`)
+- `scripts/compile-brief`, `scripts/novel-calc`, `scripts/novel-hanja` fallback
 - tmux writer/supervisor/auditor 세션
 - Codex self-review + Codex audit logs
 

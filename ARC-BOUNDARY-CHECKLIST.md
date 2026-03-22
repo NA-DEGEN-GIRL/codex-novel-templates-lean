@@ -34,6 +34,16 @@
   - 플롯 재배선 필요
 
 `HOLD`는 바로 지우지 말고 `summaries/review-log.md`에 남긴다.
+단, 기록만 하고 끝내지 말고 반드시 `hold_route`를 붙인다.
+
+- `retro-fix`
+  - 이미 집필된 화의 직접 충돌을 나중에 전용 repair batch로 수정
+- `forward-fix`
+  - 미래 화에서 사건/정보/관계 변화로 자연 보상
+- `plot-repair`
+  - 다음 아크 outline 또는 master outline 재설계
+- `user-escalation`
+  - 작품 핵심 약속 변경, 대규모 구조 변경
 
 ## 3. Patch In This Order
 
@@ -48,6 +58,14 @@
 7. Korean naturalness
 
 같은 화를 동시에 여러 축으로 수정하지 않는다. 앞 수정이 뒤 판단을 바꾸기 쉽다.
+
+`patch-feasible` 항목은 화수별 repair batch로 묶어 처리한다.
+
+- `micro`: 1~3문장 보정
+- `local`: 문단 단위 수정
+- `rewrite`: 장면 단위 재작성
+
+한 화의 patch-feasible 항목은 가능하면 한 번의 repair batch로 끝내고, 반복 수정이 길어지면 `HOLD` 재분류를 검토한다.
 
 ## 4. Reconcile State Files
 
@@ -76,6 +94,26 @@
 
 이 분류를 `running-context.md`와 `promise-tracker.md`에 반영한다.
 
+open `HOLD`가 `forward-fix`라면 추가로 아래를 남긴다.
+
+- `review-log.md`: `HOLD-ID / target / latest-safe-resolution / payoff-plan`
+- `running-context.md`: 다음 1~3화 내 작업 경고
+- 해당 `plot/arc-XX.md`: 실제 삽입 비트
+
+추가 필수 필드:
+
+- `scope: current-arc | next-arc`
+- `blocker: yes | no`
+
+기본값:
+
+- `retro-fix` → `blocker: yes`
+- `forward-fix` → `blocker: no`
+- `plot-repair` → `blocker: yes`
+- `user-escalation` → `blocker: yes`
+
+`scope: current-arc`인 open HOLD는 이번 아크 마감 전에 해결해야 한다.
+
 ## 6. Next Arc Readiness
 
 다음 아크의 `plot/arc-XX.md`를 확인하고 최소 아래가 보이는지 점검한다.
@@ -96,6 +134,7 @@
   - 이번 아크 감사 결과
   - patch-feasible 처리 내역
   - HOLD 목록
+  - 각 HOLD의 `hold_route`, target, 만기 화수, 상태
 - `summaries/action-log.md`
   - 아크 경계 감사 수행 로그 한 줄
 
@@ -107,4 +146,7 @@
 2. HOLD가 기록됨
 3. summary 파일 재정합 완료
 4. 다음 아크 런웨이가 `running-context.md`에 명시됨
-5. action-log와 review-log가 갱신됨
+5. 모든 open HOLD에 `hold_route`와 만기 화수가 붙음
+6. `scope`와 `blocker`가 모든 open HOLD에 붙음
+7. `scope: current-arc` open HOLD가 없음
+8. action-log와 review-log가 갱신됨
