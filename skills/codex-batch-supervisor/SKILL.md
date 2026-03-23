@@ -61,7 +61,7 @@ Do not assume a visible prompt means success. Verify artifacts.
 When the writer is ready for the next episode:
 
 - send the episode prompt
-- require context loading via `scripts/compile-brief`
+- require context loading via `novel-editor` MCP `compile_brief`
 - determine and inject the correct review floor
 - require summary updates
 - require action-log append
@@ -91,8 +91,7 @@ At arc boundaries, require:
 ### 5. Keep the pipeline Codex-only
 
 Do not require external AI review.
-Do not require `.claude/commands`.
-Use local scripts and direct file verification instead.
+Use native MCP and direct file verification instead.
 
 ## Commands And Tools
 
@@ -100,10 +99,10 @@ Prefer:
 
 - `tmux capture-pane`
 - `tmux send-keys`
-- `scripts/compile-brief`
+- `novel-editor` MCP `compile_brief`
 - direct reads of `summaries/`, `plot/`, and `chapters/`
 
-Use `scripts/novel-calc` or `scripts/novel-hanja` only if the writer task genuinely needs them.
+Use `novel-calc` or `novel-hanja` only if the writer task genuinely needs them.
 
 ## Failure Handling
 

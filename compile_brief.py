@@ -644,24 +644,23 @@ def _extract_character_slice(
     return "\n\n".join(result) if result else ""
 
 
-def _extract_claude_md_rules(content: str) -> str:
-    """CLAUDE.md에서 금지사항 + §5.1 의도적 미스터리 + 호칭/어투 매트릭스를 추출한다."""
+def _extract_constitution_rules(content: str) -> str:
+    """CODEX.md 또는 CLAUDE.md에서 금지사항 + 의도적 미스터리 + 호칭/어투 매트릭스를 추출한다."""
     if not content:
         return "(파일 없음)"
 
     parts: list[str] = []
 
     # 금지사항 섹션 — 번호 항목만 추출 (설명 제거)
-    # 한국어("금지 사항") 또는 영어("Prohibitions") 헤딩 모두 매칭
     prohib_match = re.search(
-        r"## 5\.\s*(?:금지 사항|Prohibitions)\s*\n(.*?)(?=\n### 5\.1|$)",
+        r"## (?:5|6)\.\s*(?:금지 사항|Prohibitions)\s*\n(.*?)(?=\n### (?:5|6)\.1|$)",
         content,
         re.DOTALL,
     )
     if not prohib_match:
-        # §5.1이 없는 경우 원래 패턴으로 폴백
+        # 하위 섹션이 없는 경우 폴백
         prohib_match = re.search(
-            r"## 5\.\s*(?:금지 사항|Prohibitions)\s*\n(.*?)(?=\n## \d|$)",
+            r"## (?:5|6)\.\s*(?:금지 사항|Prohibitions)\s*\n(.*?)(?=\n## \d|$)",
             content,
             re.DOTALL,
         )
@@ -678,10 +677,10 @@ def _extract_claude_md_rules(content: str) -> str:
                     prohib_lines.append(f"- {stripped[:60]}")
         parts.append("### 금지사항\n\n" + "\n".join(prohib_lines))
 
-    # §5.1 Intentional Mysteries — 테이블 전체를 추출
+    # Intentional Mysteries — 테이블 전체를 추출
     # 의도적 미스터리를 브리프에 포함해야 작가가 플롯 홀로 오인하지 않는다
     mystery_match = re.search(
-        r"### 5\.1\s*(?:Intentional Mysteries|의도적 미스터리|의도적 비밀).*?\n(.*?)(?=\n## \d|\n### 5\.2|\n---\n|$)",
+        r"### (?:5|6)\.1\s*(?:Intentional Mysteries|의도적 미스터리|의도적 비밀).*?\n(.*?)(?=\n## \d|\n### (?:5|6)\.2|\n---\n|$)",
         content,
         re.DOTALL,
     )
@@ -699,7 +698,7 @@ def _extract_claude_md_rules(content: str) -> str:
                 + "\n".join(mystery_lines)
             )
 
-    # 호칭/어투 매트릭스 — 테이블만 추출
+    # 호칭/어투 매트릭스 — 있을 때만 추출
     speech_match = re.search(
         r"### 8\.1 호칭/어투 매트릭스\s*\n(.*?)(?=\n### 8\.2|$)",
         content,
@@ -763,9 +762,9 @@ def _extract_style_rules(content: str) -> str:
 
 
 def _extract_notation_rules(
-    worldbuilding: str, claude_md: str
+    worldbuilding: str, constitution_md: str
 ) -> str:
-    """worldbuilding과 CLAUDE.md에서 표기/단위 규칙을 추출한다.
+    """worldbuilding과 CODEX/CLAUDE constitution에서 표기/단위 규칙을 추출한다.
 
     시대 판별: worldbuilding에 현대/SF 키워드가 있으면 비현대 숫자 규칙을 주입하지 않는다.
     """
@@ -787,13 +786,13 @@ def _extract_notation_rules(
         if any(kw.lower() in wb_lower for kw in modern_keywords):
             is_modern = True
 
-    # CLAUDE.md에서 비현대 숫자 표기 규칙 — 비현대 배경에서만 주입
+    # constitution에서 비현대 숫자 표기 규칙 — 비현대 배경에서만 주입
     if not is_modern:
-        if "아라비아 숫자" in claude_md:
+        if "아라비아 숫자" in constitution_md:
             rules.append("- 비현대 배경: 아라비아 숫자 금지, 한글 수사 사용")
-        if "소수점" in claude_md:
+        if "소수점" in constitution_md:
             rules.append("- 소수점 금지 (1.5장→한 장 반)")
-        if "사흘" in claude_md:
+        if "사흘" in constitution_md:
             rules.append("- 3일→사흘, 7일→이레, 10일→열흘, 15일→보름")
     else:
         rules.append("- 현대/SF 배경: 아라비아 숫자, 현대 단위, 외래어 자연스럽게 허용")
@@ -973,7 +972,9 @@ def _compile_brief(
     promise_tracker = _safe_read(summaries / "promise-tracker.md")
     foreshadowing = _safe_read(novel_path / "plot" / "foreshadowing.md")
     episode_log = _safe_read(summaries / "episode-log.md")
-    claude_md = _safe_read(novel_path / "CLAUDE.md")
+    constitution_md = _safe_read(novel_path / "CODEX.md")
+    if not constitution_md:
+        constitution_md = _safe_read(novel_path / "CLAUDE.md")
     style_guide = _safe_read(
         novel_path / "settings" / "01-style-guide.md"
     )
@@ -1120,7 +1121,7 @@ def _compile_brief(
     sections.append(f"## 최근 에피소드\n\n{recent_episodes}")
 
     # 9. 핵심 규칙 (상시 포함 — settings/ 직접 읽기 대체)
-    rules = _extract_claude_md_rules(claude_md)
+    rules = _extract_constitution_rules(constitution_md)
     style = _extract_style_rules(style_guide)
     rules_combined = rules
     if style:
@@ -1130,7 +1131,7 @@ def _compile_brief(
     worldbuilding = _safe_read(
         novel_path / "settings" / "04-worldbuilding.md"
     )
-    notation_rules = _extract_notation_rules(worldbuilding, claude_md)
+    notation_rules = _extract_notation_rules(worldbuilding, constitution_md)
     if notation_rules:
         rules_combined += "\n\n### 표기 규칙\n\n" + notation_rules
 
@@ -1258,6 +1259,7 @@ def _estimate_source_size(novel_dir: str) -> float:
         "summaries/promise-tracker.md",
         "summaries/episode-log.md",
         "plot/foreshadowing.md",
+        "CODEX.md",
         "CLAUDE.md",
         "settings/01-style-guide.md",
     ]

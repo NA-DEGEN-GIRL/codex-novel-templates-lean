@@ -1,7 +1,7 @@
 # Claude Project -> Codex Project Migration Prompt
 
 > 기존 Claude 기반 소설 프로젝트를 Codex 운영 방식으로 옮길 때 쓰는 프롬프트.
-> 목표는 "집필 가능한 Codex 버전"을 만드는 것이지, Claude 내부 명령 체계를 억지로 복제하는 것이 아니다.
+> 목표는 "집필 + 정기 점검 + 아크 경계 감사가 가능한 Codex 버전"을 만드는 것이지, Claude 내부 명령 체계를 억지로 복제하는 것이 아니다.
 
 ## 사용법
 
@@ -27,7 +27,7 @@ codex-novel-templates-lean/ 를 기준으로 [프로젝트명]/ 을 Codex 운영
 
 - Claude 중심 운영 문서를 Codex 중심 운영 문서로 치환
 - 핵심 소설 데이터 구조(`settings/`, `plot/`, `summaries/`, `chapters/`) 유지
-- Codex에서 다음 화 집필이 가능한 최소 상태 확보
+- Codex에서 다음 화 집필과 기존 화 감사가 가능한 상태 확보
 - 필요한 경우에만 얇은 자동화 제안
 
 ## 단계
@@ -48,9 +48,11 @@ codex-novel-templates-lean/ 를 기준으로 [프로젝트명]/ 을 Codex 운영
 
 - `CLAUDE.md` -> `CODEX.md`
 - `.claude/agents/writer.md` -> Codex writer workflow
-- `.claude/agents/unified-reviewer.md` -> Codex review checklist
+- `.claude/agents/unified-reviewer.md` -> Codex review stack
 - `why-check`, `oag-check` -> plot-check workflow
-- `batch-supervisor.md` -> Codex 운영 메모 또는 수동 배치 절차
+- `batch-supervisor.md` -> Codex tmux supervision doc
+- `batch-supervisor-audit.md` -> Codex tmux audit supervision doc
+- arc boundary / periodic review 관련 checker 흐름 -> `settings/07-periodic.md` + `ARC-BOUNDARY-CHECKLIST.md`
 
 위험 요소와 롤백 기준도 적는다.
 
@@ -60,6 +62,9 @@ codex-novel-templates-lean/ 를 기준으로 [프로젝트명]/ 을 Codex 운영
 
 - `CODEX.md`
 - `MIGRATION-NOTES-CODEX.md`
+- `batch-supervisor-codex.md` 또는 프로젝트 맞춤 supervisor 문서
+- `batch-supervisor-audit-codex.md` 또는 프로젝트 맞춤 audit 문서
+- `ARC-BOUNDARY-CHECKLIST.md` 프로젝트판
 
 필요하면 아래도 만든다.
 
@@ -78,6 +83,9 @@ codex-novel-templates-lean/ 를 기준으로 [프로젝트명]/ 을 Codex 운영
 - file priority
 - writing workflow
 - summary update rule
+- periodic check rules
+- arc boundary rules
+- EPISODE_META 규약
 
 의미는 보존하고, Codex 기준으로 표현만 바꿔라.
 
@@ -96,8 +104,11 @@ codex-novel-templates-lean/ 를 기준으로 [프로젝트명]/ 을 Codex 운영
 
 - `chapters/` diff 없음
 - `CODEX.md`만 읽어도 다음 화 작업 순서를 이해할 수 있음
+- `CODEX.md` + `settings/07-periodic.md` + `ARC-BOUNDARY-CHECKLIST.md`만 읽어도 정기 점검과 아크 마감 절차를 이해할 수 있음
 - `summaries/`와 `plot/`가 여전히 참조 가능함
 - Codex 기준 집필 절차가 과도하게 Claude 명령어에 묶여 있지 않음
+- `compile_brief.py`가 `CODEX.md` 우선 구조로 동작함
+- 기존 `CLAUDE.md`가 없어도 새 Codex 운영 문서만으로 브리프와 감독 루프가 돌아갈 수 있음
 
 ### 7. 결과 보고
 
@@ -107,16 +118,17 @@ codex-novel-templates-lean/ 를 기준으로 [프로젝트명]/ 을 Codex 운영
 2. 치환한 것
 3. 보류한 것
 4. 지금 바로 집필 가능한지
-5. 다음 자동화 우선순위 3개
+5. 지금 바로 감사 가능한지
+6. 다음 자동화 우선순위 3개
 
 ## 중요 판단 기준
 
 - Codex에서 실제로 돌릴 수 있는가
 - 새 사람이 봐도 운영 방식이 이해되는가
 - Claude 기능 부재가 치명적이지 않은가
-- 자동화 없이도 한 화를 쓸 수 있는가
+- 자동화 없이도 한 화를 쓰고, 5화 단위 점검과 아크 경계 감사를 수행할 수 있는가
 ```
 
 ## 권장 해석
 
-이 프롬프트는 "모든 Claude agent를 Codex skill/MCP로 먼저 다시 만들자"는 방향을 피한다. 먼저 운영 문서와 프로젝트 구조를 Codex 친화적으로 바꾼 뒤, 반복 비용이 큰 부분만 자동화하는 순서가 맞다.
+이 프롬프트는 "모든 Claude agent를 Codex skill/MCP로 먼저 다시 만들자"는 방향을 피한다. 먼저 운영 문서, 브리프 엔진, 감독 문서를 Codex 친화적으로 바꾼 뒤, 반복 비용이 큰 부분만 자동화하는 순서가 맞다.

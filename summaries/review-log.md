@@ -8,6 +8,7 @@
 - 서사 종합: {X.X}/5.0 (standard/full만)
 - 한글: ❌{n}건
 - patch-feasible 적용: ...
-- HOLD: ...
+- HOLD:
+  - [HOLD-ID] defect / route(retro-fix|forward-fix|plot-repair|user-escalation) / target / latest-safe-resolution / preserve / payoff-plan / status(open|planned|blocked|resolved)
 - 판정: {통과/수정필요}
 -->
