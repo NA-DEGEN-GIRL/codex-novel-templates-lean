@@ -130,7 +130,8 @@ native MCP 예시:
 
 ## Quick Start
 
-1. 이 레포를 복사한다.
+1. 이 레포를 `/root/novel/no-title-XXX` 형식의 새 프로젝트 폴더로 복사한다.
+   - `XXX`는 3자리 숫자다. 이미 존재하면 다음 사용 가능한 번호를 쓴다.
 2. `INIT-PROMPT.md`를 기준으로 `CODEX.md`와 `settings/`를 채운다.
    - 특히 `settings/01-style-guide.md`, `settings/03-characters.md`, `settings/05-continuity.md`, `settings/07-periodic.md`를 먼저 채운다.
 3. `codex mcp list`로 필요한 MCP가 등록되어 있는지 확인한다.
