@@ -34,6 +34,65 @@ def _clean_character_name(name: str) -> str:
     return re.sub(r"\s*\([^)]*\)", "", name).strip()
 
 
+def _has_placeholder_marker(text: str) -> bool:
+    """미치환 템플릿 placeholder가 남아 있는지 확인한다."""
+    return "{{" in text or "}}" in text
+
+
+def _split_markdown_row(line: str) -> list[str]:
+    """마크다운 표 한 줄을 셀 배열로 나눈다."""
+    if not line.startswith("|"):
+        return []
+    return [cell.strip() for cell in line.split("|")[1:-1]]
+
+
+def _is_table_separator(line: str) -> bool:
+    """마크다운 표 구분선인지 확인한다."""
+    return bool(line) and all(ch in "-|: " for ch in line)
+
+
+def _is_placeholder_table_row(line: str) -> bool:
+    """실데이터가 아닌 placeholder/빈 행을 판정한다."""
+    cells = [cell for cell in _split_markdown_row(line) if cell]
+    if not cells:
+        return True
+    if _has_placeholder_marker(line):
+        return True
+    return all(cell in {"—", "-", "–"} for cell in cells)
+
+
+def _extract_first_table_after_heading(
+    content: str, headings: list[str]
+) -> list[str]:
+    """지정된 ## 헤딩 아래의 첫 번째 표 블록을 추출한다."""
+    if not content:
+        return []
+
+    lines = content.splitlines()
+    start_idx = None
+    heading_set = {f"## {heading}" for heading in headings}
+    for idx, line in enumerate(lines):
+        if line.strip() in heading_set:
+            start_idx = idx + 1
+            break
+
+    if start_idx is None:
+        return []
+
+    table_lines: list[str] = []
+    for idx in range(start_idx, len(lines)):
+        stripped = lines[idx].strip()
+        if stripped.startswith("## "):
+            break
+        if stripped.startswith("|"):
+            table_lines.append(stripped)
+            continue
+        if table_lines:
+            break
+
+    return table_lines
+
+
 def _iter_plot_files(novel_dir: str) -> list[Path]:
     """집필 브리프에 사용할 plot 파일들을 순회한다."""
     plot_dir = Path(novel_dir) / "plot"
@@ -471,6 +530,68 @@ def _filter_knowledge_map(
         return "(정보 보유 기록 없음)"
 
     lines = content.splitlines()
+    target_names = {
+        _clean_character_name(char) for char in characters if char.strip()
+    }
+
+    # 1. 현재 템플릿 기본 형식: 캐릭터별 섹션 + 개별 표
+    char_section_match = re.search(
+        r"## 캐릭터별 정보 현황\s*\n(.*?)(?=\n##\s+|\Z)",
+        content,
+        re.DOTALL,
+    )
+    if char_section_match:
+        char_section = char_section_match.group(1)
+        blocks: list[str] = []
+        real_section_count = 0
+        for match in re.finditer(
+            r"(?ms)^###\s+(.+?)\n(.*?)(?=^###\s+|\n##\s+|\Z)",
+            char_section,
+        ):
+            raw_title = match.group(1).strip()
+            if _has_placeholder_marker(raw_title):
+                continue
+
+            title = _clean_character_name(raw_title)
+            if not title:
+                continue
+            real_section_count += 1
+
+            if not any(
+                target == title or target in title or title in target
+                for target in target_names
+            ):
+                continue
+
+            table_lines: list[str] = []
+            for line in match.group(2).splitlines():
+                stripped = line.strip()
+                if stripped.startswith("|"):
+                    table_lines.append(stripped)
+                    continue
+                if table_lines:
+                    break
+
+            if len(table_lines) < 2:
+                continue
+
+            data_rows = [
+                line for line in table_lines[2:]
+                if not _is_placeholder_table_row(line)
+            ]
+            if not data_rows:
+                continue
+
+            blocks.append(
+                f"### {title}\n\n"
+                + "\n".join(table_lines[:2] + data_rows[:10])
+            )
+
+        if blocks:
+            return "\n\n".join(blocks)
+        if real_section_count > 0:
+            return "(해당 캐릭터 정보 없음)"
+        return "(정보 보유 기록 없음)"
 
     # 테이블 헤더 행을 찾는다 (| 정보 | 캐릭터1 | ... |)
     header_line_idx = None
@@ -505,19 +626,39 @@ def _filter_knowledge_map(
 
     # 헤더 + 구분선 + 데이터 행 필터링
     result_lines: list[str] = []
+    data_rows: list[str] = []
 
+    table_lines = []
     for i in range(header_line_idx, len(lines)):
-        line = lines[i]
-        if not line.startswith("|"):
+        line = lines[i].strip()
+        if line.startswith("|"):
+            table_lines.append(line)
             continue
+        if table_lines:
+            break
 
+    if len(table_lines) < 2:
+        return "(정보 보유 기록 없음)"
+
+    for idx, line in enumerate(table_lines):
         row_cols = line.split("|")
         # 필터링된 열만 남기기
         filtered = [
             row_cols[j] if j < len(row_cols) else ""
             for j in keep_indices
         ]
-        result_lines.append("|" + "|".join(filtered) + "|")
+        filtered_line = "|" + "|".join(filtered) + "|"
+        if idx < 2:
+            result_lines.append(filtered_line)
+            continue
+        if _is_placeholder_table_row(filtered_line):
+            continue
+        data_rows.append(filtered_line)
+
+    if not data_rows:
+        return "(정보 보유 기록 없음)"
+
+    result_lines.extend(data_rows)
 
     # 결과가 너무 길면 최근 정보만 (마지막 25행)
     # 장편(60화+)에서 15행은 핵심 지식을 놓칠 수 있으므로 25행으로 확대.
@@ -548,17 +689,17 @@ def _filter_relationship_log(
         return "(파일 없음)"
 
     parts: list[str] = []
+    target_names = {
+        _clean_character_name(char) for char in characters if char.strip()
+    }
 
     # 1. 관계 매트릭스
-    matrix_match = re.search(
-        r"## (?:관계 매트릭스|관계 상태 매트릭스)\s*\n((?:\|.+\n)+)", content
+    matrix_lines = _extract_first_table_after_heading(
+        content, ["관계 매트릭스", "관계 상태 매트릭스"]
     )
-    if matrix_match:
-        matrix_text = matrix_match.group(1)
-        matrix_lines = matrix_text.strip().splitlines()
+    if matrix_lines:
         if len(matrix_lines) >= 2:
             header = matrix_lines[0]
-            separator = matrix_lines[1]
             cols = [c.strip().strip("*") for c in header.split("|")]
 
             # 캐릭터에 해당하는 열 인덱스
@@ -568,20 +709,25 @@ def _filter_relationship_log(
                     if idx == 0 or idx == len(cols) - 1:
                         keep_cols.append(idx)
                     continue
-                if "A \\ B" in col or "A\\B" in col.replace(" ", ""):
+                compact = col.replace(" ", "")
+                if compact in {"A\\B", "→", "->"}:
                     keep_cols.append(idx)
-                elif any(char in col for char in characters):
+                elif any(char in col for char in target_names):
                     keep_cols.append(idx)
+            keep_cols = sorted(set(keep_cols))
 
             # 캐릭터가 포함된 행만 추출
             filtered_rows: list[str] = []
             for line in matrix_lines:
+                if _is_placeholder_table_row(line):
+                    continue
                 row_cols = line.split("|")
                 # 행의 첫 번째 데이터 열에 캐릭터 이름이 있는지
                 first_data = row_cols[1].strip().strip("*") if len(row_cols) > 1 else ""
-                is_header = "A \\ B" in first_data or "A\\B" in first_data.replace(" ", "")
-                is_separator = all(c in "-| " for c in line)
-                is_char_row = any(char in first_data for char in characters)
+                compact = first_data.replace(" ", "")
+                is_header = compact in {"A\\B", "→", "->"}
+                is_separator = _is_table_separator(line)
+                is_char_row = any(char in first_data for char in target_names)
 
                 if is_header or is_separator or is_char_row:
                     filtered = [
@@ -600,20 +746,20 @@ def _filter_relationship_log(
                 ]
                 truncated_rows.append("|".join(cols))
 
-            if truncated_rows:
+            if len(truncated_rows) > 2:
                 parts.append("### 관계 매트릭스\n\n" + "\n".join(truncated_rows))
 
     # 2. 만남 로그 — 최근 항목 중 캐릭터가 포함된 것만
-    log_match = re.search(r"## 만남 로그\s*\n((?:\|.+\n)+)", content)
-    if log_match:
-        log_text = log_match.group(1)
-        log_lines = log_text.strip().splitlines()
+    log_lines = _extract_first_table_after_heading(content, ["만남 로그"])
+    if log_lines:
         if len(log_lines) >= 2:
             header = log_lines[0]
             separator = log_lines[1]
             filtered = [header, separator]
             for line in log_lines[2:]:
-                if any(char in line for char in characters):
+                if _is_placeholder_table_row(line):
+                    continue
+                if any(char in line for char in target_names):
                     filtered.append(line)
 
             # 최근 5건만, 셀 내용 150자 제한
@@ -633,7 +779,8 @@ def _filter_relationship_log(
                 else:
                     truncated.append(line)
 
-            parts.append("### 최근 만남 로그\n\n" + "\n".join(truncated))
+            if len(truncated) > 2:
+                parts.append("### 최근 만남 로그\n\n" + "\n".join(truncated))
 
     return "\n\n".join(parts) if parts else "(해당 캐릭터 관계 없음)"
 
@@ -648,43 +795,43 @@ def _filter_promise_tracker(content: str) -> str:
         return "(파일 없음)"
 
     # '## 활성 약속' 또는 '## 활성 약속 (미이행)' 섹션 추출
-    active_match = re.search(
-        r"## 활성 약속(?:\s*\(미이행\))?\s*\n(.*?)(?=\n## |$)",
-        content,
-        re.DOTALL,
+    table_lines = _extract_first_table_after_heading(
+        content, ["활성 약속", "활성 약속 (미이행)"]
     )
-    if not active_match:
+    if len(table_lines) < 2:
         return "(활성 약속 없음)"
 
-    section = active_match.group(1).strip()
-
     # 테이블을 간결한 리스트 형식으로 변환 (테이블은 너무 넓어서 읽기 어렵다)
-    lines = section.splitlines()
     result: list[str] = []
+    header_cells = _split_markdown_row(table_lines[0])
+    header_map = {cell: idx for idx, cell in enumerate(header_cells)}
 
-    for line in lines:
-        if not line.startswith("|"):
-            continue
-        # 구분선 건너뛰기
-        if all(c in "-| " for c in line):
-            continue
-        # 헤더행 건너뛰기
-        if "ID" in line and "당사자" in line:
-            continue
+    id_idx = header_map.get("ID", 0)
+    desc_idx = header_map.get("약속/계획")
+    party_idx = header_map.get("당사자")
+    due_idx = header_map.get("예정 회수")
+    priority_idx = header_map.get("우선순위")
+    detail_idx = header_map.get("상세")
 
-        cols = [c.strip() for c in line.split("|")]
-        # cols: ['', ID, 당사자, 내용, 투하, 예정회수, 우선순위, 상세, '']
-        cols = [c for c in cols if c]  # 빈 문자열 제거
-        if len(cols) < 4:
+    if desc_idx is None or party_idx is None:
+        return "(활성 약속 없음)"
+
+    for line in table_lines[2:]:
+        if _is_table_separator(line) or _is_placeholder_table_row(line):
+            continue
+        cols = _split_markdown_row(line)
+        if len(cols) <= max(id_idx, desc_idx, party_idx):
             continue
 
         pid = cols[0]
-        parties = cols[1]
-        desc = cols[2]
+        desc = cols[desc_idx]
+        parties = cols[party_idx]
+        if not pid or not desc or not parties:
+            continue
         # 상세에서 최근 진전만 (마지막 100자)
-        detail = cols[-1] if len(cols) > 5 else ""
-        status = cols[4] if len(cols) > 4 else ""
-        priority = cols[5] if len(cols) > 5 else ""
+        detail = cols[detail_idx] if detail_idx is not None and detail_idx < len(cols) else ""
+        due = cols[due_idx] if due_idx is not None and due_idx < len(cols) else ""
+        priority = cols[priority_idx] if priority_idx is not None and priority_idx < len(cols) else ""
 
         # 최근 진전 추출
         latest = ""
@@ -695,9 +842,11 @@ def _filter_promise_tracker(content: str) -> str:
             if progress:
                 latest = f" (최근: {progress[-1]})"
 
+        meta_bits = [bit for bit in [due, priority] if bit]
+        meta = f" [{' / '.join(meta_bits)}]" if meta_bits else ""
         result.append(
             f"- **{pid}** {parties}: {desc[:80]}"
-            f" [{status}]{latest}"
+            f"{meta}{latest}"
         )
 
     return "\n".join(result) if result else "(활성 약속 없음)"
@@ -1287,11 +1436,13 @@ def _extract_relationship_turning_points(content: str) -> str:
 
     turning_keywords = ["반전", "단절", "화해", "배신", "고백", "결별",
                         "전환", "변화", "갈등", "결렬"]
-    lines = content.splitlines()
+    lines = _extract_first_table_after_heading(content, ["관계 변화 이력"])
     result: list[str] = []
 
     for line in lines:
         if not line.startswith("|"):
+            continue
+        if _is_table_separator(line) or _is_placeholder_table_row(line):
             continue
         if any(kw in line for kw in turning_keywords):
             # 200자 제한
