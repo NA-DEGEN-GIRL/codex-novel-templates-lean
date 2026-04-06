@@ -1,15 +1,17 @@
-# Codex Utility Scripts
+# Codex Lean Runtime Scripts
 
-Codex native MCP가 불가할 때 lean의 핵심 도구 일부를 셸 명령처럼 쓰기 위한 로컬 fallback 래퍼.
+Codex lean의 기본 경로는 **native MCP 직접 호출**이다.
 
-현재 lean의 기본 경로는 native MCP다.
+- `compile_brief`
+- `novel-calc`
+- `novel-hanja`
+- `novel-naming`
 
-- `novel-editor` → `compile_brief`
-- `novel-calc` → 계산/분량 검증
-- `novel-hanja` → 한자 검증
-- `novel-naming` → 표기 변이 점검
+하지만 lean은 MCP fallback wrapper와 tmux/session helper를 함께 둔다.
+즉 `scripts/`는 둘 다 포함한다.
 
-`scripts/`는 MCP 미등록, 일시 장애, 로컬 디버깅 상황에서만 쓴다.
+1. MCP 미등록, 일시 장애, 로컬 디버깅용 compatibility wrapper
+2. Codex tmux writer/supervisor 운영용 helper
 
 ## Available
 
@@ -72,11 +74,30 @@ scripts/run-codex-writer
 scripts/run-codex-auditor
 ```
 
+### `scripts/tmux-send-codex`
+
+Codex tmux 세션에 프롬프트를 보내고, `2초` 안에 `Working`뿐 아니라 `Explored`/`Edited`/`Ran`/`Reading` 같은 진행 표시, 새 응답 블록, 또는 입력 프롬프트 소멸을 시작 신호로 본다. 셋 다 안 보이면 `Enter`를 한 번만 다시 보내고 재확인한다.
+
+```bash
+bash scripts/tmux-send-codex write-001 "continue" 2 60
+```
+
+### `scripts/tmux-wait-sentinel`
+
+tmux pane을 폴링해서 `WRITER_DONE ...` 또는 `FIX_DONE ...` 같은 sentinel 문자열을 기다린다. 시작 시 pane에 이미 남아 있던 sentinel과 새로 나온 sentinel을 구분한다.
+
+```bash
+bash scripts/tmux-wait-sentinel write-001 "WRITER_DONE chapter-05.md" 1800 2 200
+bash scripts/tmux-wait-sentinel write-001 "FIX_DONE chapter-05" 600 1 120
+```
+
 ## Notes
 
 - 이 스크립트들은 MCP 연결 없이 로컬 import 방식으로 동작한다.
-- lean의 기본 경로는 native MCP이고, 이 스크립트는 compatibility fallback이다.
+- lean의 기본 경로는 native MCP이고, `compile-brief` / `novel-calc` / `novel-hanja`는 compatibility fallback이다.
 - `mcp` 파이썬 패키지가 설치되어 있어야 서버 모듈 import가 된다.
 - 경로는 현재 워크스페이스(`/root/novel/...`) 기준으로 고정되어 있다.
 - `run-codex-writer` / `run-codex-supervisor` / `run-codex-auditor`는 승인 프롬프트를 최대한 없애기 위해 `--dangerously-bypass-approvals-and-sandbox`를 사용한다.
+- `tmux-send-codex`는 Codex의 Enter 타이밍 quirks를 흡수하고, 멀티라인 프롬프트도 첫 줄 기준으로 마지막 입력 프롬프트 줄만 확인한다.
+- `tmux-wait-sentinel`은 기존 pane에 남은 sentinel을 새 완료 신호로 오인하지 않도록 기본적으로 무시한다.
 - 이 옵션은 외부 샌드박스나 사용자가 환경을 통제하고 있을 때만 쓰는 것이 맞다.

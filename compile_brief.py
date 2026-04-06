@@ -29,84 +29,346 @@ def _safe_read(path: str | Path) -> str:
         return ""
 
 
+def _clean_character_name(name: str) -> str:
+    """캐릭터명에서 설명용 괄호를 제거해 표기 앵커를 만든다."""
+    return re.sub(r"\s*\([^)]*\)", "", name).strip()
+
+
+def _iter_plot_files(novel_dir: str) -> list[Path]:
+    """집필 브리프에 사용할 plot 파일들을 순회한다."""
+    plot_dir = Path(novel_dir) / "plot"
+    if not plot_dir.exists():
+        return []
+
+    files: list[Path] = []
+    for path in plot_dir.glob("*.md"):
+        if path.name in {"master-outline.md", "foreshadowing.md", "timeline.md"}:
+            continue
+        if re.match(
+            r"^(?:prologue|epilogue|arc-\d+|interlude(?:-\d+)?)\.md$",
+            path.name,
+        ):
+            files.append(path)
+
+    def _sort_key(path: Path) -> tuple[int, int | str]:
+        stem = path.stem
+        if stem == "prologue":
+            return (0, 0)
+        if stem.startswith("arc-"):
+            try:
+                return (1, int(stem.split("-", 1)[1]))
+            except ValueError:
+                return (1, stem)
+        if stem.startswith("interlude"):
+            match = re.search(r"(\d+)$", stem)
+            return (2, int(match.group(1)) if match else 0)
+        if stem == "epilogue":
+            return (3, 0)
+        return (4, stem)
+
+    return sorted(files, key=_sort_key)
+
+
+def _extract_episode_plot_block(content: str, episode_number: int) -> str:
+    """플롯 파일에서 해당 화의 블록을 추출한다."""
+    if not content:
+        return ""
+
+    for level in (2, 3, 4):
+        pattern = re.compile(
+            rf"(?ms)^#{{{level}}}\s*{episode_number}화[^\n]*\n"
+            rf".*?(?=^#{{1,{level}}}\s+|\Z)"
+        )
+        match = pattern.search(content)
+        if match:
+            return match.group(0).strip()
+
+    lines = content.splitlines()
+    for idx, line in enumerate(lines):
+        stripped = line.strip()
+        if not stripped.startswith("|"):
+            continue
+
+        cells = [c.strip() for c in stripped.split("|")[1:-1]]
+        if len(cells) < 4 or not cells[0].isdigit():
+            continue
+        if int(cells[0]) != episode_number:
+            continue
+
+        block_title = ""
+        for back in range(idx - 1, -1, -1):
+            header = lines[back].strip()
+            if header.startswith("### "):
+                block_title = header[4:].strip()
+                break
+
+        parts: list[str] = []
+        if block_title:
+            parts.append(f"### {block_title}")
+        parts.append(f"## {episode_number}화")
+        parts.append(f"- 목표: {cells[1]}")
+        if len(cells) > 2 and cells[2]:
+            parts.append(f"- 훅 타입: {cells[2]}")
+        if len(cells) > 3 and cells[3]:
+            parts.append(f"- 핵심 장면: {cells[3]}")
+        return "\n".join(parts)
+
+    return ""
+
+
+def _find_episode_chapter_path(
+    novel_dir: str, episode_number: int
+) -> Optional[Path]:
+    """episode_number에 해당하는 chapter 파일 경로를 찾는다."""
+    chapters_dir = Path(novel_dir) / "chapters"
+    if not chapters_dir.exists():
+        return None
+
+    for path in sorted(chapters_dir.glob("**/chapter-*.md")):
+        match = re.search(r"chapter-(\d+)\.md$", path.name)
+        if match and int(match.group(1)) == episode_number:
+            return path
+    return None
+
+
+def _extract_characters_from_episode_meta(content: str) -> list[str]:
+    """EPISODE_META의 characters_appeared를 추출한다."""
+    if not content:
+        return []
+
+    meta_match = re.search(
+        r"### EPISODE_META\s*```yaml(.*?)```",
+        content,
+        re.DOTALL,
+    )
+    if not meta_match:
+        return []
+
+    characters: list[str] = []
+    in_characters = False
+    for line in meta_match.group(1).splitlines():
+        stripped = line.strip()
+        if stripped.startswith("characters_appeared:"):
+            in_characters = True
+            continue
+        if not in_characters:
+            continue
+        if stripped.startswith("- "):
+            characters.append(_clean_character_name(stripped[2:].strip()))
+            continue
+        if re.match(r"[a-z_]+:", stripped):
+            break
+        if stripped:
+            break
+
+    return [c for c in characters if c]
+
+
+def _strip_episode_meta(content: str) -> str:
+    """본문에서 EPISODE_META 이하를 제거한다."""
+    return re.sub(
+        r"\n---\s*\n### EPISODE_META\s*```yaml.*",
+        "",
+        content,
+        flags=re.DOTALL,
+    ).strip()
+
+
+def _extract_previous_episode_anchor(
+    novel_dir: str, episode_number: int
+) -> str:
+    """직전 화 마지막 장면을 오프닝 앵커용으로 압축 추출한다."""
+    prev_ep = episode_number - 1
+    if prev_ep <= 0:
+        return ""
+
+    prev_path = _find_episode_chapter_path(novel_dir, prev_ep)
+    if not prev_path:
+        return ""
+
+    prev_content = _safe_read(prev_path)
+    if not prev_content:
+        return ""
+
+    body = _strip_episode_meta(prev_content)
+    body = re.sub(r"^#.*\n+", "", body).strip()
+    if not body:
+        return ""
+
+    scenes = [
+        scene.strip()
+        for scene in re.split(r"(?m)^\*\*\*\s*$", body)
+        if scene.strip()
+    ]
+    last_scene = scenes[-1] if scenes else body
+    paragraphs = [p.strip() for p in last_scene.split("\n\n") if p.strip()]
+    excerpt = "\n\n".join(
+        paragraphs[-8:] if len(paragraphs) > 8 else paragraphs
+    )
+
+    if len(excerpt) > 1800:
+        excerpt = excerpt[:1800].rstrip() + "\n...(생략)"
+
+    rules = [
+        "- 아래 장면에서 실제로 끝난 일만 다음 화 오프닝의 기정사실로 이어간다.",
+        "- 보고/허락/안심/소문 확산/관아 전달/관계 변화는 본문에 보이지 않았으면 아직 발생하지 않은 것으로 본다.",
+    ]
+    return "\n".join(rules) + "\n\n### 직전 화 마지막 장면\n\n" + excerpt
+
+
+def _extract_episode_log_table_rows(
+    content: str,
+) -> list[tuple[int, dict[str, str]]]:
+    """episode-log.md의 표 형식을 파싱한다."""
+    if not content:
+        return []
+
+    headers: list[str] | None = None
+    rows: list[tuple[int, dict[str, str]]] = []
+
+    for line in content.splitlines():
+        stripped = line.strip()
+        if not stripped.startswith("|"):
+            continue
+
+        cells = [c.strip() for c in stripped.split("|")[1:-1]]
+        if not cells:
+            continue
+
+        if headers is None:
+            if "화" in cells[0] or "episode" in cells[0].lower():
+                headers = cells
+            continue
+
+        if all(not cell or set(cell) <= {"-", ":"} for cell in cells):
+            continue
+        if not cells[0].isdigit():
+            continue
+
+        normalized = cells + [""] * (len(headers) - len(cells))
+        row = {headers[idx]: normalized[idx] for idx in range(len(headers))}
+        rows.append((int(cells[0]), row))
+
+    return rows
+
+
 # ─── Parsers ───────────────────────────────────────────────
 
 
 def _extract_characters_from_plot(
     novel_dir: str, episode_number: int
 ) -> list[str]:
-    """plot/arc-XX.md에서 해당 에피소드의 등장인물 목록을 추출한다.
-
-    아크 파일 안에서 episode_number에 해당하는 화별 상세 섹션을 찾고,
-    '등장인물' 또는 'characters' 줄에서 이름을 뽑는다.
-    찾지 못하면 최근 에피소드 로그에서 추출을 시도한다.
-    """
+    """plot 파일에서 해당 에피소드의 등장인물 목록을 추출한다."""
     characters: list[str] = []
 
-    # 아크 파일들을 순회하며 에피소드 범위에 맞는 파일을 찾는다
     plot_dir = Path(novel_dir) / "plot"
     if not plot_dir.exists():
         return characters
 
-    for arc_file in sorted(plot_dir.glob("arc-*.md")):
-        content = _safe_read(arc_file)
-        if not content:
+    tracked_names = _extract_all_tracked_characters(
+        Path(novel_dir) / "summaries" / "character-tracker.md"
+    )
+
+    for plot_file in _iter_plot_files(novel_dir):
+        block = _extract_episode_plot_block(_safe_read(plot_file), episode_number)
+        if not block:
             continue
 
-        # "56~70화" 같은 범위 표시에서 이 에피소드가 포함되는지 확인
-        # 또는 "### 67화:" 같은 화별 헤더가 있는지 확인
-        ep_pattern = rf"###?\s*{episode_number}화"
-        match = re.search(ep_pattern, content)
-        if not match:
-            continue
-
-        # 해당 섹션부터 다음 ### 헤더까지 추출
-        section_start = match.start()
-        next_header = re.search(r"\n###?\s", content[section_start + 1 :])
-        if next_header:
-            section = content[
-                section_start : section_start + 1 + next_header.start()
-            ]
-        else:
-            section = content[section_start:]
-
-        # 등장인물 줄 파싱
-        for line in section.splitlines():
+        for line in block.splitlines():
             if "등장인물" in line or "characters" in line.lower():
-                # "윤서하, 리라, 차민혁" 또는 "윤서하(주인공), 리라(AI)" 등
-                # 콜론 이후의 내용에서 이름을 추출
                 after_colon = line.split(":", 1)[-1] if ":" in line else line
-                # 괄호 안의 설명을 제거하고 쉼표로 분리
                 cleaned = re.sub(r"\([^)]*\)", "", after_colon)
                 names = [
-                    n.strip().strip("*")
+                    _clean_character_name(n.strip().strip("*"))
                     for n in cleaned.split(",")
                     if n.strip()
                 ]
                 characters.extend(names)
                 break
 
-    # 플롯에서 못 찾으면 에피소드 로그 마지막 항목에서 추출
+        if characters:
+            break
+
+        matched = [
+            name for name in tracked_names
+            if name and name not in characters and name in block
+        ]
+        if matched:
+            characters.extend(matched[:6])
+            break
+
+        if block and tracked_names:
+            characters.append(tracked_names[0])
+            break
+
     if not characters:
         characters = _extract_characters_from_episode_log(
             novel_dir, episode_number
         )
 
-    return characters
+    seen: set[str] = set()
+    deduped: list[str] = []
+    for name in characters:
+        clean = _clean_character_name(name)
+        if clean and clean not in seen:
+            seen.add(clean)
+            deduped.append(clean)
+
+    return deduped
 
 
 def _extract_characters_from_episode_log(
     novel_dir: str, episode_number: int
 ) -> list[str]:
-    """episode-log.md에서 직전 에피소드의 등장인물을 추출한다."""
+    """직전 화의 EPISODE_META 또는 episode-log에서 등장인물을 추출한다."""
+    prev_ep = episode_number - 1
+    if prev_ep <= 0:
+        return []
+
+    prev_path = _find_episode_chapter_path(novel_dir, prev_ep)
+    if prev_path:
+        meta_chars = _extract_characters_from_episode_meta(_safe_read(prev_path))
+        if meta_chars:
+            return meta_chars
+
     content = _safe_read(
         Path(novel_dir) / "summaries" / "episode-log.md"
     )
     if not content:
         return []
 
-    # 직전 에피소드 섹션을 찾는다
-    prev_ep = episode_number - 1
+    tracker_names = _extract_all_tracked_characters(
+        Path(novel_dir) / "summaries" / "character-tracker.md"
+    )
+
+    table_rows = _extract_episode_log_table_rows(content)
+    if table_rows:
+        for ep_num, row in table_rows:
+            if ep_num != prev_ep:
+                continue
+
+            cast_text = (
+                row.get("등장인물")
+                or row.get("characters")
+                or row.get("인물")
+                or ""
+            )
+            if cast_text:
+                split_names = re.split(r"[,/·]", cast_text)
+                names = [
+                    _clean_character_name(name.strip())
+                    for name in split_names
+                    if name.strip()
+                ]
+                if names:
+                    return names[:8]
+
+            haystack = " ".join(row.values())
+            matched = [name for name in tracker_names if name and name in haystack]
+            if matched:
+                return matched[:6]
+            break
+
     pattern = rf"###?\s*{prev_ep}화"
     match = re.search(pattern, content)
     if not match:
@@ -126,7 +388,7 @@ def _extract_characters_from_episode_log(
             after_colon = line.split(":", 1)[-1] if ":" in line else line
             cleaned = re.sub(r"\([^)]*\)", "", after_colon)
             names = [
-                n.strip().strip("*")
+                _clean_character_name(n.strip().strip("*"))
                 for n in cleaned.split(",")
                 if n.strip()
             ]
@@ -174,6 +436,9 @@ def _filter_character_tracker(
                     for k in [
                         "현재 위치", "위치", "상태", "정신 상태",
                         "경지", "부상", "핵심 동기", "미해결",
+                        "Current Location", "Current Status", "Status",
+                        "Injury", "Injuries", "Notes", "비고",
+                        "Knowledge", "Current Goal",
                     ]
                 ):
                     # 200자 제한
@@ -202,6 +467,9 @@ def _filter_knowledge_map(
     if not content or not characters:
         return "(파일 없음)"
 
+    if "(초기화)" in content:
+        return "(정보 보유 기록 없음)"
+
     lines = content.splitlines()
 
     # 테이블 헤더 행을 찾는다 (| 정보 | 캐릭터1 | ... |)
@@ -212,7 +480,7 @@ def _filter_knowledge_map(
             break
 
     if header_line_idx is None:
-        return "(테이블 헤더를 찾을 수 없음)"
+        return "(정보 보유 기록 없음)"
 
     header = lines[header_line_idx]
     cols = [c.strip() for c in header.split("|")]
@@ -529,6 +797,38 @@ def _extract_last_n_episodes(
     if not content:
         return "(파일 없음)"
 
+    table_rows = _extract_episode_log_table_rows(content)
+    if table_rows:
+        selected_rows = [
+            (ep_num, row)
+            for ep_num, row in table_rows
+            if before_episode <= 0 or ep_num < before_episode
+        ]
+        if selected_rows:
+            selected_rows.sort(key=lambda x: x[0])
+            blocks: list[str] = []
+            for ep_num, row in selected_rows[-n:]:
+                details: list[str] = []
+                summary = row.get("요약") or row.get("summary") or ""
+                location = row.get("장소") or row.get("location") or ""
+                cast = row.get("등장인물") or row.get("characters") or ""
+                hook = row.get("엔딩 훅") or row.get("next_episode_hook") or ""
+
+                if summary:
+                    details.append(f"- 요약: {summary[:240]}")
+                if location:
+                    details.append(f"- 장소: {location[:160]}")
+                if cast:
+                    details.append(f"- 등장인물: {cast[:160]}")
+                if hook:
+                    details.append(f"- 엔딩 훅: {hook[:180]}")
+                if not details:
+                    details.append("- 요약 없음")
+
+                blocks.append(f"### {ep_num}화\n" + "\n".join(details))
+
+            return "\n\n".join(blocks)
+
     # --- 구분선으로 섹션 분리
     sections = re.split(r"\n---\n", content)
     episode_sections: list[tuple[int, str]] = []
@@ -573,6 +873,114 @@ def _extract_last_n_episodes(
         result.append("\n".join(compressed))
 
     return "\n\n".join(result)
+
+
+def _filter_dialogue_log(
+    content: str, characters: list[str], before_episode: int
+) -> str:
+    """dialogue-log.md에서 등장인물의 최근 대화 운용을 추출한다.
+
+    행 유형:
+    - 이탈 행: 톤 델타/관계톤/지향이 채워진 행 (보이스 drift 정보)
+    - role-only 행: 대화 기능만 기록, 나머지 "—" (역할 고착 판정용)
+
+    추출 우선순위: 이탈 행 > role-only 행.
+    캐릭터당 최대 2행, 전체 최대 8행, 섹션 하드캡 1200자.
+    """
+    if not content:
+        return ""
+
+    # 테이블 행 파싱 (헤더/구분선 제외)
+    rows: list[dict] = []
+    for line in content.splitlines():
+        line = line.strip()
+        if not line.startswith("|"):
+            continue
+        cells = [c.strip() for c in line.split("|")[1:-1]]
+        if len(cells) < 5:
+            continue
+        # 헤더/구분선 스킵: 숫자가 없는 행은 모두 제외
+        ep_str = re.sub(r"[^0-9]", "", cells[0])
+        if not ep_str:
+            continue
+        ep_num = int(ep_str)
+        if ep_num >= before_episode:
+            continue
+        # 이탈 행 vs role-only 행 판별 (톤 델타가 "—"이면 role-only)
+        is_deviation = len(cells) > 3 and cells[3].strip() not in ("—", "-", "")
+        rows.append({
+            "episode": ep_num,
+            "character": cells[1],
+            "line": line,
+            "is_deviation": is_deviation,
+        })
+
+    if not rows:
+        return ""
+
+    # 캐릭터 필터
+    include_all = not characters
+    matched_chars: set[str] = set()
+
+    for row in rows:
+        char = row["character"]
+        if not include_all and not any(c in char for c in characters):
+            continue
+        matched_chars.add(char)
+
+    # 각 캐릭터별: 이탈 행 우선, role-only 보조. 캐릭터당 최대 2행.
+    result_lines: list[str] = []
+    for char in matched_chars:
+        char_rows = [r for r in rows if r["character"] == char]
+        if not char_rows:
+            continue
+
+        recent_cutoff = before_episode - 3
+        # 이탈 행: 최근 3화 내 + 마지막 이탈 1건
+        dev_rows = [r for r in char_rows if r["is_deviation"]]
+        recent_dev = [r for r in dev_rows if r["episode"] >= recent_cutoff]
+        if dev_rows and dev_rows[-1] not in recent_dev:
+            recent_dev.append(dev_rows[-1])
+
+        # role-only 행: 최신 1건 (역할 고착 판정 보조)
+        role_rows = [r for r in char_rows if not r["is_deviation"]]
+        latest_role = [role_rows[-1]] if role_rows else []
+
+        # 이탈 우선 합치기, 최대 2행
+        combined = recent_dev + latest_role
+        # 중복 제거 + 최신 우선
+        seen_lines: set[str] = set()
+        unique: list[dict] = []
+        for r in sorted(combined, key=lambda x: x["episode"], reverse=True):
+            if r["line"] not in seen_lines:
+                seen_lines.add(r["line"])
+                unique.append(r)
+        for r in unique[:2]:
+            result_lines.append(r["line"])
+
+    if not result_lines:
+        return ""
+
+    # 전체 캡: 최대 8행
+    result_lines = result_lines[:8]
+
+    header = "| 화 | 캐릭터 | 대화 기능 | 톤 델타 | 관계톤 | 지향 |\n"
+    header += "|----|--------|----------|---------|--------|------|\n"
+    output = header + "\n".join(result_lines)
+
+    # 섹션 하드캡: 1200자
+    if len(output) > 1200:
+        lines = output.splitlines()
+        truncated = lines[:2]  # 헤더 + 구분선
+        total = sum(len(l) for l in truncated) + len(truncated)
+        for line in lines[2:]:
+            if total + len(line) + 1 > 1200:
+                break
+            truncated.append(line)
+            total += len(line) + 1
+        output = "\n".join(truncated)
+
+    return output
 
 
 def _extract_character_slice(
@@ -803,38 +1211,19 @@ def _extract_notation_rules(
 def _extract_episode_goals(
     novel_dir: str, episode_number: int
 ) -> str:
-    """plot/arc-XX.md에서 해당 에피소드의 목표/내용을 추출한다."""
+    """plot 파일에서 해당 에피소드의 목표/내용을 추출한다."""
     plot_dir = Path(novel_dir) / "plot"
     if not plot_dir.exists():
         return "(플롯 파일 없음)"
 
-    for arc_file in sorted(plot_dir.glob("arc-*.md")):
-        content = _safe_read(arc_file)
-        if not content:
-            continue
-
-        # 해당 에피소드 화별 상세 찾기
-        ep_pattern = rf"####?\s*{episode_number}화"
-        match = re.search(ep_pattern, content)
-        if not match:
-            continue
-
-        section_start = match.start()
-        # 다음 #### 헤더 또는 --- 까지
-        next_section = re.search(
-            r"\n####?\s|\n---", content[section_start + 1 :]
+    for plot_file in _iter_plot_files(novel_dir):
+        section = _extract_episode_plot_block(
+            _safe_read(plot_file), episode_number
         )
-        if next_section:
-            section = content[
-                section_start : section_start + 1 + next_section.start()
-            ]
-        else:
-            section = content[section_start:]
-
-        # 너무 길면 잘라내기
+        if not section:
+            continue
         if len(section) > 1500:
             section = section[:1500] + "\n...(생략)"
-
         return section.strip()
 
     return "(해당 에피소드 플롯 없음)"
@@ -846,7 +1235,7 @@ def _extract_all_tracked_characters(tracker_path: str | Path) -> list[str]:
     if not content:
         return []
     names = re.findall(r"^### (.+)", content, re.MULTILINE)
-    return [n.strip() for n in names[:10]]  # 최대 10명
+    return [_clean_character_name(n) for n in names[:10]]  # 최대 10명
 
 
 def _extract_global_knowledge(content: str) -> str:
@@ -972,6 +1361,7 @@ def _compile_brief(
     promise_tracker = _safe_read(summaries / "promise-tracker.md")
     foreshadowing = _safe_read(novel_path / "plot" / "foreshadowing.md")
     episode_log = _safe_read(summaries / "episode-log.md")
+    dialogue_log = _safe_read(summaries / "dialogue-log.md")
     constitution_md = _safe_read(novel_path / "CODEX.md")
     if not constitution_md:
         constitution_md = _safe_read(novel_path / "CLAUDE.md")
@@ -998,38 +1388,67 @@ def _compile_brief(
     goals = _extract_episode_goals(novel_dir, episode_number)
     sections.append(f"## 이번 화 목표\n\n{goals}")
 
+    # 1.5. 다음 화 오프닝 직결 앵커
+    prev_anchor = _extract_previous_episode_anchor(novel_dir, episode_number)
+    if prev_anchor:
+        sections.append(f"## 직전 화 직결 앵커\n\n{prev_anchor}")
+
     # 2. 최근 맥락 — 현재 상태 + 최근 아크 요약만 (압축 흐름은 생략)
     if running_context:
         rc_parts: list[str] = []
         # "## 현재 상태" 또는 "## 현재 시점" 섹션 추출
         current_match = re.search(
-            r"## (?:현재 상태|현재 시점)\s*\n(.*?)(?=\n## |$)",
+            r"## (?:현재 상태|현재 시점|Current Status|Current State)\s*\n(.*?)(?=\n## |$)",
             running_context,
             re.DOTALL,
         )
         if current_match:
             rc_parts.append(current_match.group(1).strip())
 
-        # "## 압축 흐름" / "## 전체 흐름 압축" / "## 전체 흐름 (압축)" 중 마지막 아크 2개만
+        immediate_match = re.search(
+            r"## (?:직전 화 직결 상태|Immediate Carry-Forward|Carry-Forward)\s*\n(.*?)(?=\n## |$)",
+            running_context,
+            re.DOTALL,
+        )
+        if immediate_match:
+            rc_parts.append(
+                "**직결 상태**:\n" + immediate_match.group(1).strip()
+            )
+
         flow_match = re.search(
-            r"## (?:압축 흐름|전체 흐름 압축|전체 흐름 \(압축\))\s*\n(.*?)(?=\n## |$)",
+            r"## (?:압축 흐름|전체 흐름 압축|전체 흐름 \(압축\)|Recent Events|Compressed Flow)\s*\n(.*?)(?=\n## |$)",
             running_context,
             re.DOTALL,
         )
         if flow_match:
-            arc_blocks = re.split(
-                r"(?=^### )", flow_match.group(1), flags=re.MULTILINE
-            )
-            # 비어있지 않은 블록 중 마지막 2개만
+            flow_text = flow_match.group(1).strip()
+            arc_blocks = re.split(r"(?=^### )", flow_text, flags=re.MULTILINE)
             non_empty = [b for b in arc_blocks if b.strip()]
-            if non_empty:
+            if non_empty and any(
+                block.lstrip().startswith("### ") for block in non_empty
+            ):
                 rc_parts.append(
                     "**최근 흐름**:\n" + "\n".join(non_empty[-2:]).strip()
                 )
+            else:
+                bullets = [
+                    line.strip()
+                    for line in flow_text.splitlines()
+                    if line.strip().startswith("-")
+                ]
+                if bullets:
+                    rc_parts.append(
+                        "**최근 흐름**:\n" + "\n".join(bullets[-3:])
+                    )
+                elif flow_text:
+                    clipped = flow_text[:700]
+                    if len(flow_text) > 700:
+                        clipped += "\n...(생략)"
+                    rc_parts.append("**최근 흐름**:\n" + clipped)
 
         # "## 캐릭터 최종 상태" 테이블 — 등장인물만 필터
         char_table_match = re.search(
-            r"## 캐릭터 최종 상태\s*\n(.*?)(?=\n## |$)",
+            r"## (?:캐릭터 최종 상태|Character End State|Character State)\s*\n(.*?)(?=\n## |$)",
             running_context,
             re.DOTALL,
         )
@@ -1051,25 +1470,46 @@ def _compile_brief(
 
         # "## 복선 최종 상태" 섹션 — 테이블만
         foreshadow_match = re.search(
-            r"## 복선 최종 상태\s*\n(.*?)(?=\n## |$)",
+            r"## (?:복선 최종 상태|Foreshadowing End State)\s*\n(.*?)(?=\n## |$)",
             running_context,
             re.DOTALL,
         )
         if foreshadow_match:
             rc_parts.append(foreshadow_match.group(1).strip())
 
-        rc_body = "\n\n".join(rc_parts) if rc_parts else running_context
+        rc_body = "\n\n".join(rc_parts)
+        if not rc_body:
+            rc_body = running_context[:1200]
+            if len(running_context) > 1200:
+                rc_body += "\n...(생략)"
         sections.append(f"## 최근 맥락\n\n{rc_body}")
     else:
         sections.append("## 최근 맥락\n\n(파일 없음)")
 
-    # 3. 등장인물 상태
+    # 3. 등장인물 설정 슬라이스 (settings/03-characters.md에서 핵심만 — 앵커 역할)
+    slice_chars = characters
+    if not slice_chars:
+        slice_chars = _extract_all_tracked_characters(
+            summaries / "character-tracker.md"
+        )
+    char_slice = _extract_character_slice(novel_dir, slice_chars)
+    if char_slice:
+        sections.append(f"## 등장인물 설정\n\n{char_slice}")
+
+    # 3.5. 최근 대화 운용 (dialogue-log.md — 이탈 행 + role-only 행)
+    filtered_dialogue = _filter_dialogue_log(
+        dialogue_log, characters, episode_number
+    )
+    if filtered_dialogue:
+        sections.append(f"## 최근 대화 운용\n\n{filtered_dialogue}")
+
+    # 4. 등장인물 상태
     filtered_chars = _filter_character_tracker(
         character_tracker, characters
     )
     sections.append(f"## 등장인물 상태\n\n{filtered_chars}")
 
-    # 4. 정보 보유 현황
+    # 5. 정보 보유 현황
     filtered_knowledge = _filter_knowledge_map(knowledge_map, characters)
     sections.append(f"## 정보 보유 현황\n\n{filtered_knowledge}")
 
@@ -1179,16 +1619,7 @@ def _compile_brief(
         if cont_parts:
             sections.append("## 연속성 불변 조건\n\n" + "\n\n".join(cont_parts))
 
-    # 10. 등장인물 설정 슬라이스 (settings/03-characters.md에서 핵심만)
-    # characters가 비어있으면(첫 화 등) 전체 추적 캐릭터, 그것도 비면 주인공+주요 캐릭터 전체
-    slice_chars = characters
-    if not slice_chars:
-        slice_chars = _extract_all_tracked_characters(
-            summaries / "character-tracker.md"
-        )
-    char_slice = _extract_character_slice(novel_dir, slice_chars)
-    if char_slice:
-        sections.append(f"## 등장인물 설정\n\n{char_slice}")
+    # 10. (등장인물 설정은 섹션 3으로 이동됨)
 
     # 10.5. 에피소드 구조/분량 (settings/02-episode-structure.md에서 핵심만)
     ep_structure = _safe_read(novel_path / "settings" / "02-episode-structure.md")

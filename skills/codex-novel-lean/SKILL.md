@@ -47,7 +47,9 @@ Prefer this order:
 3. `plot/arc-XX.md`
 4. `plot/foreshadowing.md`
 5. `summaries/character-tracker.md`
-6. previous episode ending
+6. previous episode ending, preferably the whole last scene
+
+If `compile_brief` exposes `직전 화 직결 앵커`, treat it as the first gate for the next episode opening.
 
 If the task is review-only, load only the files needed for that review.
 
@@ -76,6 +78,8 @@ For writing:
 - follow `settings/01-style-guide.md`
 - follow `settings/02-episode-structure.md`
 - write narrative output in Korean
+- carry forward only facts actually shown in the previous ending; do not invent off-screen reports, approvals, reassurance, or rumor spread
+- keep named co-present characters visible in scene logic
 - use `novel-calc` only for verification, not to drive prose
 - use `novel-hanja` when Hanja naming or verification matters
 
@@ -95,6 +99,8 @@ After manuscript changes, update at minimum:
 - `summaries/episode-log.md`
 - `summaries/character-tracker.md`
 
+Also make sure `running-context.md` keeps `Immediate Carry-Forward` or an equivalent section for the next episode opening.
+
 Update these only if relevant:
 
 - `summaries/promise-tracker.md`
@@ -102,6 +108,8 @@ Update these only if relevant:
 - `summaries/relationship-log.md`
 - `summaries/decision-log.md`
 - `plot/foreshadowing.md`
+
+Update `summaries/knowledge-map.md` whenever a report, warning, permission, rumor, or secret-sharing actually succeeds or fails on-page.
 
 If a major action is completed, append one line to `summaries/action-log.md`.
 

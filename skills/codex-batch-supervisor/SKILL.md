@@ -38,7 +38,7 @@ Read these first:
 2. `CODEX.md`
 3. `settings/07-periodic.md`
 4. `ARC-BOUNDARY-CHECKLIST.md`
-4. `plot/arc-XX.md` for the current episode when needed
+5. `plot/arc-XX.md` for the current episode when needed
 
 Only read more if blocked.
 
@@ -62,6 +62,7 @@ When the writer is ready for the next episode:
 
 - send the episode prompt
 - require context loading via `novel-editor` MCP `compile_brief`
+- use `scripts/tmux-send-codex` when available instead of raw `tmux send-keys`
 - determine and inject the correct review floor
 - require summary updates
 - require action-log append
@@ -73,6 +74,7 @@ Treat an episode as complete only when all are true:
 1. chapter file exists
 2. required summaries were updated
 3. `summaries/action-log.md` records the work
+4. `running-context.md` carries forward the immediate next-episode state
 
 If one is missing, do not advance blindly.
 
@@ -98,7 +100,8 @@ Use native MCP and direct file verification instead.
 Prefer:
 
 - `tmux capture-pane`
-- `tmux send-keys`
+- `scripts/tmux-send-codex`
+- `scripts/tmux-wait-sentinel`
 - `novel-editor` MCP `compile_brief`
 - direct reads of `summaries/`, `plot/`, and `chapters/`
 
