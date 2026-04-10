@@ -209,6 +209,17 @@ repair batch 지시 원칙:
 - 한 화를 여러 축으로 동시에 흔들지 말고, 한 번의 배치로 끝낼 수 있게 묶기
 - 재수정이 길어지면 `patch-feasible`이 아니라 `HOLD` 재분류 검토
 
+`resolution_threshold`:
+
+- `resolved`
+  - 사실 오류와 장면 결함이 사라졌고 다음 화 carry-forward를 다시 열 수 있을 때
+- `accepted_with_residuals`
+  - 핵심 결함은 닫혔고 문장 밀도/리듬 같은 경미한 잔여만 남을 때
+- `escalate_hold`
+  - 같은 결함이 한 번의 repair batch 뒤에도 반복되거나, 2개 이상 장면 재작성이 필요해지거나, plot 변경이 필요해질 때
+
+lean에서는 한 화당 repair batch를 1회까지만 권장한다. 그 뒤에도 `resolved`가 아니면 fix ping-pong보다 `HOLD` 라우팅을 우선한다.
+
 ## HOLD Transfer Routing
 
 `HOLD`는 "나중에 보자"가 아니라, 즉시 수정하지 못한 구조 이슈를 명시적 목적지로 보내는 이관 티켓이다.
@@ -351,6 +362,7 @@ blocker 기본값:
 3. `running-context.md`, `episode-log.md`, `character-tracker.md` 갱신
 4. `running-context.md`의 `Immediate Carry-Forward` 또는 동등 섹션이 현재 화 종료 상태를 반영
 5. 필요한 경우 조건부 summary도 반영
+6. `python3 ${NOVEL_DIR}/scripts/verify-writer-done.py --novel-dir ${NOVEL_DIR} --episode ${N}` 통과
 
 아크 마지막 화는 추가로 아래가 필요하다.
 
@@ -359,6 +371,7 @@ blocker 기본값:
 8. patch-feasible/HOLD 구분 완료
 9. open HOLD의 `hold_route`와 만기 화수 지정 완료
 10. `blocker=yes` HOLD 없음 또는 사용자 승인 확보
+11. voice profile freshness 확인 또는 다음 아크 첫 화 전 갱신 예약
 
 ## Root config.json Update
 
@@ -432,6 +445,7 @@ bash ${NOVEL_DIR}/scripts/tmux-wait-sentinel ${SESSION} "WRITER_DONE chapter-05.
 - `tmux-send-codex`는 Codex의 Enter 전송 타이밍과 시작 신호(`Working`, `Explored`, `Edited`, 입력 프롬프트 소멸)를 함께 확인한다.
 - `tmux-wait-sentinel`은 bare `WRITER_DONE`이 아니라 `RUN_NONCE`가 붙은 exact sentinel line을 기다린다.
 - `tmux-send-codex`, `tmux-wait-sentinel`, `compile_brief`, `check-open-holds.py`는 `tmp/run-metadata/events.jsonl`에 런타임 이벤트를 남긴다.
+- sentinel이 잡혀도 supervisor는 `python3 ${NOVEL_DIR}/scripts/verify-writer-done.py --novel-dir ${NOVEL_DIR} --episode ${N}`로 파일 기준 완료 검증을 다시 한다. gate 실패 시 다음 화로 진행하지 않는다.
 - 긴 멀티라인 프롬프트는 첫 Enter나 1회 재시도 후에도 실제 제출이 안 될 수 있다. `NO_START_SIGNAL`이나 동일 프롬프트 잔류만으로 즉시 stalled 판정하지 말고, pane을 다시 캡처해 마지막 입력 프롬프트 줄이 그대로 남아 있으면 Enter를 1~2회 추가로 보내 재확인한다.
 - 시작 신호가 없더라도 마지막 입력 프롬프트 줄이 아직 남아 있으면 "멈춤"보다 "아직 제출 대기"로 우선 해석한다. 프롬프트가 실제로 사라졌거나 새 출력이 시작된 뒤에만 다음 상태 판정을 진행한다.
 - `WORKING_CONFIRMED`, `WORKING_CONFIRMED_AFTER_RETRY`, `RESPONSE_CONFIRMED`, `PROMPT_DISAPPEARED` 중 하나가 잡힌 뒤에는 writer가 문서를 읽거나 계획을 세우는 구간도 정상 진행으로 본다. 이 단계에서는 새 프롬프트를 덧붙이지 말고 `tmux-wait-sentinel` 또는 명시적 장기 timeout까지 기다린다.
@@ -444,6 +458,23 @@ bash ${NOVEL_DIR}/scripts/tmux-wait-sentinel ${SESSION} "WRITER_DONE chapter-05.
 - 회복 프롬프트는 `working`이 아닌 상태에서 `tmux-wait-sentinel` timeout 또는 명백한 입력 대기/오류가 확인됐을 때만 보낸다.
 - same-state 정체가 길더라도 먼저 pane 재캡처로 출력 증가 여부와 마지막 20~80줄 변화를 확인한 뒤, 정말 무변화일 때만 "현재 단계만 마무리하고 다음 단계로 진행" 같은 회복 프롬프트를 넣는다.
 - crash 시에는 파일 기준으로 마지막 완료 화를 다시 판정하고 그 다음 화부터 재개한다.
+
+## Voice Profile Freshness Handoff
+
+아크 경계나 반복 drift가 의심될 때는 `settings/01-style-guide.md` §0.3 대표 문단이 현재 실제 서술 목소리와 계속 맞는지 확인한다.
+
+권장 절차:
+
+1. 최근 아크 범위에 대해 아래를 실행한다.
+
+```bash
+python3 ${NOVEL_DIR}/scripts/suggest-voice-profile-refresh.py --novel-dir ${NOVEL_DIR} --from-episode ${ARC_START} --to-episode ${ARC_END} --top 5
+```
+
+2. 후보 문단 중 현재 화자/리듬/시점 운용을 가장 잘 대표하는 것을 골라 §0.3을 갱신한다.
+3. 적절한 문단을 바로 확정하기 어렵다면 `summaries/review-log.md`에 open HOLD로 남기고, 다음 아크 첫 화 전까지 처리한다.
+
+이 handoff는 "문체를 새로 발명"하는 절차가 아니라, 실제로 굴러간 voice를 style guide에 다시 동기화하는 절차다.
 
 ## Runtime Assumption
 

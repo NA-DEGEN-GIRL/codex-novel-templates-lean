@@ -83,6 +83,7 @@ Treat an episode as complete only when all are true:
 2. required summaries were updated
 3. `summaries/action-log.md` records the work
 4. `running-context.md` carries forward the immediate next-episode state
+5. `scripts/verify-writer-done.py --novel-dir <novel_dir> --episode <N>` passes when the repo provides it
 
 If one is missing, do not advance blindly.
 
@@ -97,6 +98,7 @@ At arc boundaries, require:
 - minimal patching or HOLD classification
 - next arc readiness check
 - review-log and action-log updates
+- voice profile freshness handoff or explicit HOLD before the next arc starts
 
 ### 5. Keep the pipeline Codex-only
 
