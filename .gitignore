@@ -4,3 +4,5 @@ tmp/briefs/
 tmp/run-metadata/
 tmp/sentinels/
 .pytest_cache/
+tmp/*.md
+tmp/*.txt
