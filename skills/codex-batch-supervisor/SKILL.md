@@ -55,17 +55,25 @@ Use tmux capture to classify the writer session:
 - completed
 
 Do not assume a visible prompt means success. Verify artifacts.
+Treat `Working`, `Reading`, `Explored`, `Edited`, `Ran`, or steadily growing output as normal in-progress work, not as a stall.
 
 ### 2. Send writing prompt
 
 When the writer is ready for the next episode:
 
 - send the episode prompt
+- mint a fresh `RUN_NONCE` for that prompt or repair batch
+- run `scripts/check-open-holds.py` before sending the prompt when the repo provides it
 - require context loading via `novel-editor` MCP `compile_brief`
 - use `scripts/tmux-send-codex` when available instead of raw `tmux send-keys`
+- for long pasted prompts, do not treat one failed Enter attempt as a true stall; if the last prompt line is still visible, send 1-2 additional `Enter` presses and re-check before declaring failure
+- interpret `NO_START_SIGNAL` as "submission may still be pending" until pane capture shows the prompt actually disappeared or new output started
 - determine and inject the correct review floor
 - require summary updates
+- require `running-context.md` HOLD warnings / live fields maintenance when relevant
 - require action-log append
+- require the final completion line to be an exact nonce-bearing sentinel such as `WRITER_DONE chapter-05.md :: run={RUN_NONCE}`
+- after a valid start signal, do not send extra guidance while the writer is still visibly working; wait for that exact sentinel or a real timeout first
 
 ### 3. Verify completion
 
@@ -113,7 +121,9 @@ If the writer session stalls:
 
 - verify whether the model is still producing output
 - check if it is waiting for input
-- send a short continuation or recovery prompt
+- if `Working`/`Reading`/`Explored`/`Edited`/`Ran` is visible or output is still growing, do not interrupt; keep waiting
+- send a short continuation or recovery prompt only after no-progress timeout or confirmed input wait
+- if a prompt must be resent after ambiguous submission, mint a new `RUN_NONCE` and wait for the new exact sentinel instead of reusing the old one
 - avoid resetting context unless clearly necessary
 
 If the session crashed:

@@ -146,6 +146,8 @@ native MCP 예시:
    - `01-style-guide.md` → `03-characters.md` → `02-episode-structure.md` 순으로 읽고, 실제 Codex writer 기준으로 GO/REVISE를 점검한다.
    - `plot`의 고위험 화수에는 optional `risk:` 태그(`why`, `oag`, `pov-era`, `scene-logic`)를 붙인다.
 7. `batch-supervisor.md` 기준으로 writer 세션을 띄운다.
+   - supervisor 시작 문구는 `batch-supervisor.md`의 `Supervisor Start Prompt`를 복붙해서 쓰는 편이 안전하다.
+   - open HOLD가 누적되면 `scripts/check-open-holds.py`로 집필 전 blocker/만기 상태를 먼저 확인한다.
 
 ## config.json 운영
 
