@@ -126,7 +126,8 @@ python3 ${NOVEL_DIR}/scripts/check-open-holds.py --novel-dir ${NOVEL_DIR} --curr
 - `CODEX.md`의 workflow를 따른다.
 - 본문은 마크다운 제목 `# {N}화 - {제목}`으로 시작하고, 파일 끝 `EPISODE_META.title`과 같은 제목을 사용한다.
 - `settings/01-style-guide.md`, `settings/02-episode-structure.md`를 따른다.
-- `settings/03-characters.md`에서 핵심 인물의 대표 대사와 관계 상태를 확인한다.
+- `settings/03-characters.md`에서 핵심 인물의 대표 대사, 관계 상태, 관계별 말투 규칙을 확인한다.
+- `CODEX.md`의 `§8.1 호칭/어투 매트릭스`가 있으면, 이번 화에서 실제로 만나는 관계축(부모/연장자/동년배/아랫사람/적대자)을 먼저 확인한다.
 - 회상, 상대 시간 표현, 이동/회복/수련 기간, deadline, 나이/연령대 단서가 있으면 `settings/05-continuity.md`를 직접 확인한다.
 - planning flags를 먼저 정리한다.
 - 같은 공간에 있는 이름 있는 인물을 장면에서 지우지 말고, 다음 화 오프닝에서 직전 화에 없던 보고/허락/안심/정보 전달을 기정사실처럼 점프하지 말 것.
@@ -138,6 +139,7 @@ python3 ${NOVEL_DIR}/scripts/check-open-holds.py --novel-dir ${NOVEL_DIR} --curr
 - 이번 화의 기능이 실제로 수행되었는가?
 - 현재 화 오프닝이 `직전 화 직결 앵커`와 충돌하지 않는가?
 - 같은 공간의 이름 있는 인물을 빠뜨리지 않았는가?
+- 화자-청자 위계가 대사 표면에 남아 있는가? 부모/연장자/사부/상급자 앞 register를 기본 반말로 평탄화하지 않았는가?
 - 명백한 한국어 결합 오류나 meta 참조가 남지 않았는가?
 - `EPISODE_META.title`이 본문 제목과 일치하는가?
 - 필요 시 `novel-calc`, `novel-hanja`, `novel-naming` MCP를 사용한다.
@@ -193,6 +195,7 @@ python3 ${NOVEL_DIR}/scripts/check-open-holds.py --novel-dir ${NOVEL_DIR} --curr
 [검토]
 - 이번 화의 review floor는 `{review_floor}`다.
 - `continuity`: 연속성, 명백한 문장 오류, summary 정합성
+- 화자-청자 호칭, 존대/반말, 위계 register가 장면 관계와 충돌하면 continuity 급 결함으로 본다.
 - `standard`: continuity + 서사 기능 + 반복 패턴 + WHY/HOW 설명 부족 여부
 - `full`: standard + 설정/복선/아크 정합성 + 동기/행동 갭 + POV/시대/장면 논리 위험
 - prose drift가 보이면 문학적 의도라고 넘기지 말고 한국어 자연성 기준으로 잡는다.
