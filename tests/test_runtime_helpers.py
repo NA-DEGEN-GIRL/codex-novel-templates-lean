@@ -246,21 +246,6 @@ def test_verify_writer_done_checks_required_artifacts(tmp_path: Path) -> None:
         ```
         """,
     )
-    _write(
-        novel_dir / "summaries" / "running-context.md",
-        """
-        ## Immediate Carry-Forward
-        - 서린은 아직 방 안에 갇혀 있다.
-        - 열쇠의 위치는 모른다.
-        """,
-    )
-    _write(novel_dir / "summaries" / "episode-log.md", "- 4화: 빗장")
-    _write(novel_dir / "summaries" / "character-tracker.md", "- 서린: 경계 상태 유지")
-    _write(
-        novel_dir / "summaries" / "action-log.md",
-        "- chapter-04 집필 및 요약 갱신",
-    )
-
     result = _run(
         [
             "python3",
@@ -277,6 +262,57 @@ def test_verify_writer_done_checks_required_artifacts(tmp_path: Path) -> None:
     events = _events(novel_dir)
     assert any(
         event["event"] == "writer_done_gate_passed" and event["episode"] == 4
+        for event in events
+    )
+
+
+def test_verify_review_done_checks_required_artifacts(tmp_path: Path) -> None:
+    novel_dir = tmp_path / "novel"
+    _write(
+        novel_dir / "chapters" / "arc-01" / "chapter-04.md",
+        """
+        # 4화 - 빗장
+
+        문이 닫히자 방 안의 공기가 한 번에 무거워졌다.
+
+        ### EPISODE_META
+        ```yaml
+        title: 빗장
+        ```
+        """,
+    )
+    _write(
+        novel_dir / "summaries" / "running-context.md",
+        """
+        ## Immediate Carry-Forward
+        - 서린은 아직 방 안에 갇혀 있다.
+        - 열쇠의 위치는 모른다.
+        """,
+    )
+    _write(novel_dir / "summaries" / "episode-log.md", "- 4화: 빗장")
+    _write(novel_dir / "summaries" / "character-tracker.md", "- 서린: 최종 갱신 4화")
+    _write(novel_dir / "summaries" / "review-log.md", "### 4화 (continuity)\n- 판정: 통과")
+    _write(
+        novel_dir / "summaries" / "action-log.md",
+        "- 4화 review 및 summary 갱신",
+    )
+
+    result = _run(
+        [
+            "python3",
+            str(REPO_ROOT / "scripts" / "verify-review-done.py"),
+            "--novel-dir",
+            str(novel_dir),
+            "--episode",
+            "4",
+        ]
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "GATE_OK" in result.stdout
+
+    events = _events(novel_dir)
+    assert any(
+        event["event"] == "review_done_gate_passed" and event["episode"] == 4
         for event in events
     )
 

@@ -99,6 +99,8 @@ After manuscript changes, update at minimum:
 - `summaries/episode-log.md`
 - `summaries/character-tracker.md`
 
+In supervised batch mode, prefer letting the dedicated review session own these summary updates instead of the writer session.
+
 Also make sure `running-context.md` keeps `Immediate Carry-Forward` or an equivalent section for the next episode opening.
 
 Update these only if relevant:

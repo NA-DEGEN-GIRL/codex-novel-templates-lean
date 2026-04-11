@@ -74,6 +74,14 @@ scripts/run-codex-writer
 scripts/run-codex-auditor
 ```
 
+### `scripts/run-codex-review`
+
+현재 프로젝트 디렉터리에서 post-write review 전용 Codex 세션을 실행한다.
+
+```bash
+scripts/run-codex-review
+```
+
 ### `scripts/tmux-send-codex`
 
 Codex tmux 세션에 프롬프트를 보내고, `2초` 안에 `Working`뿐 아니라 `Explored`/`Edited`/`Ran`/`Reading` 같은 진행 표시, 새 응답 블록, 또는 입력 프롬프트 소멸을 시작 신호로 본다. 셋 다 안 보이면 `Enter`를 한 번만 다시 보내고 재확인한다.
@@ -110,10 +118,19 @@ python3 scripts/check-open-holds.py --novel-dir /root/novel/no-title-001-gpt --c
 
 ### `scripts/verify-writer-done.py`
 
-writer sentinel 이후 chapter/summary/action-log/carry-forward가 실제로 닫혔는지 파일 기준으로 검증한다.
+writer sentinel 이후 chapter 초안이 실제로 닫혔는지 파일 기준으로 검증한다.
+이 gate는 `chapter 파일 존재 + EPISODE_META 존재`까지만 본다.
 
 ```bash
 python3 scripts/verify-writer-done.py --novel-dir /root/novel/no-title-001-gpt --episode 12
+```
+
+### `scripts/verify-review-done.py`
+
+review sentinel 이후 `running-context`, `episode-log`, `character-tracker`, `review-log`, `action-log`, carry-forward가 실제로 닫혔는지 파일 기준으로 검증한다.
+
+```bash
+python3 scripts/verify-review-done.py --novel-dir /root/novel/no-title-001-gpt --episode 12
 ```
 
 ### `scripts/summarize-runtime-metrics.py`
@@ -146,12 +163,12 @@ python3 scripts/validate-settings.py --novel-dir /root/novel/no-title-001-gpt
 - lean의 기본 경로는 native MCP이고, `compile-brief` / `novel-calc` / `novel-hanja`는 compatibility fallback이다.
 - `mcp` 파이썬 패키지가 설치되어 있어야 서버 모듈 import가 된다.
 - 경로는 현재 워크스페이스(`/root/novel/...`) 기준으로 고정되어 있다.
-- `run-codex-writer` / `run-codex-supervisor` / `run-codex-auditor`는 승인 프롬프트를 최대한 없애기 위해 `--dangerously-bypass-approvals-and-sandbox`를 사용한다.
+- `run-codex-writer` / `run-codex-review` / `run-codex-supervisor` / `run-codex-auditor`는 승인 프롬프트를 최대한 없애기 위해 `--dangerously-bypass-approvals-and-sandbox`를 사용한다.
 - `tmux-send-codex`는 Codex의 Enter 타이밍 quirks를 흡수하고, 멀티라인 프롬프트도 첫 줄 기준으로 마지막 입력 프롬프트 줄이 **현재 pane 바닥에 남아 있는지**만 확인한다. 오래된 prompt echo만 남아 있으면 추가 Enter를 보내지 않는다.
 - 다만 매우 긴 paste에서는 helper의 1회 재시도만으로 부족할 수 있으므로, supervisor는 마지막 입력 프롬프트 줄 잔류 여부를 보고 수동 `Enter` 추가 전송 가능성을 항상 열어 둔다.
 - `tmux-wait-sentinel`은 기존 pane에 남은 sentinel을 새 완료 신호로 오인하지 않도록 기본적으로 무시한다.
 - `tmux-send-codex`, `tmux-wait-sentinel`, `compile_brief`, `check-open-holds.py`는 `tmp/run-metadata/events.jsonl`에 이벤트를 남긴다.
-- `verify-writer-done.py`도 gate pass/fail을 `events.jsonl`에 남긴다.
+- `verify-writer-done.py`, `verify-review-done.py`도 gate pass/fail을 `events.jsonl`에 남긴다.
 - `tmux-wait-sentinel`은 optional sentinel file fallback도 지원한다.
 - 추천 sentinel 형식은 `WRITER_DONE chapter-{NN}.md :: run={RUN_NONCE}`처럼 nonce가 붙은 exact 한 줄이다.
 - 이 옵션은 외부 샌드박스나 사용자가 환경을 통제하고 있을 때만 쓰는 것이 맞다.

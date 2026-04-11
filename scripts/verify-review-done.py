@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -38,6 +39,38 @@ def _find_chapter_path(novel_dir: Path, episode: int) -> Path | None:
         return None
     matches = sorted(chapters_dir.glob(f"**/chapter-{episode:02d}.md"))
     return matches[0] if matches else None
+
+
+def _has_heading_with_bullets(text: str, headings: tuple[str, ...]) -> bool:
+    if not text:
+        return False
+    lines = text.splitlines()
+    for idx, line in enumerate(lines):
+        if line.strip() not in headings:
+            continue
+        bullet_count = 0
+        for inner in lines[idx + 1 :]:
+            stripped = inner.strip()
+            if stripped.startswith("## "):
+                break
+            if stripped.startswith(("- ", "* ")):
+                bullet_count += 1
+        if bullet_count > 0:
+            return True
+    return False
+
+
+def _mentions_episode(text: str, episode: int) -> bool:
+    if not text:
+        return False
+    patterns = (
+        rf"\bchapter-{episode:02d}\b",
+        rf"(?<!\d){episode}화(?!\d)",
+        rf"episode[- ]?{episode:02d}\b",
+    )
+    return any(re.search(pattern, text, re.IGNORECASE) for pattern in patterns)
+
+
 def main(argv: list[str]) -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--novel-dir", required=True)
@@ -46,6 +79,16 @@ def main(argv: list[str]) -> int:
 
     novel_dir = Path(args.novel_dir)
     episode = args.episode
+
+    required_files = {
+        "summaries/running-context.md": novel_dir / "summaries" / "running-context.md",
+        "summaries/episode-log.md": novel_dir / "summaries" / "episode-log.md",
+        "summaries/character-tracker.md": novel_dir
+        / "summaries"
+        / "character-tracker.md",
+        "summaries/review-log.md": novel_dir / "summaries" / "review-log.md",
+        "summaries/action-log.md": novel_dir / "summaries" / "action-log.md",
+    }
 
     chapter_path = _find_chapter_path(novel_dir, episode)
     reasons: list[str] = []
@@ -60,10 +103,35 @@ def main(argv: list[str]) -> int:
         if "### EPISODE_META" not in chapter_text:
             reasons.append("missing_episode_meta")
 
+    loaded = {label: _read_text(path) for label, path in required_files.items()}
+    for label, text in loaded.items():
+        if not text:
+            reasons.append(f"missing_required={label}")
+
+    running_context = loaded["summaries/running-context.md"]
+    action_log = loaded["summaries/action-log.md"]
+    episode_log = loaded["summaries/episode-log.md"]
+    review_log = loaded["summaries/review-log.md"]
+
+    if running_context and not _has_heading_with_bullets(
+        running_context,
+        ("## Immediate Carry-Forward", "## 직전 화 직결 상태"),
+    ):
+        reasons.append("missing_carry_forward_section")
+
+    if action_log and not _mentions_episode(action_log, episode):
+        reasons.append(f"action_log_missing_episode_{episode:02d}")
+
+    if episode_log and not _mentions_episode(episode_log, episode):
+        reasons.append(f"episode_log_missing_episode_{episode:02d}")
+
+    if review_log and not _mentions_episode(review_log, episode):
+        reasons.append(f"review_log_missing_episode_{episode:02d}")
+
     if reasons:
         _append_event(
             novel_dir,
-            "writer_done_gate_failed",
+            "review_done_gate_failed",
             episode=episode,
             reasons=reasons,
         )
@@ -72,7 +140,7 @@ def main(argv: list[str]) -> int:
 
     _append_event(
         novel_dir,
-        "writer_done_gate_passed",
+        "review_done_gate_passed",
         episode=episode,
         chapter=str(chapter_path.relative_to(novel_dir)) if chapter_path else "",
     )

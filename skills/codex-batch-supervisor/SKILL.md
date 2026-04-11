@@ -5,7 +5,7 @@ description: Use when supervising a tmux-based Codex writing session for a novel
 
 # Codex Batch Supervisor
 
-Use this skill when Codex is acting as the supervisor of another Codex writer session.
+Use this skill when Codex is acting as the supervisor of another Codex writer session and a separate Codex review session.
 
 ## When To Use
 
@@ -24,6 +24,7 @@ Before supervising, identify:
 
 - novel directory
 - tmux session name
+- review session name (`<session>-review` by default)
 - episode range
 - arc mapping
 - writer launch command
@@ -46,7 +47,7 @@ Only read more if blocked.
 
 ### 1. Check session state
 
-Use tmux capture to classify the writer session:
+Use tmux capture to classify the writer session and the review session when active:
 
 - working
 - waiting
@@ -68,26 +69,42 @@ When the writer is ready for the next episode:
 - use `scripts/tmux-send-codex` when available instead of raw `tmux send-keys`
 - for long pasted prompts, do not treat one failed Enter attempt as a true stall; if the last prompt line is still visible, send 1-2 additional `Enter` presses and re-check before declaring failure
 - interpret `NO_START_SIGNAL` as "submission may still be pending" until pane capture shows the prompt actually disappeared or new output started
-- determine and inject the correct review floor
-- require summary updates
-- require `running-context.md` HOLD warnings / live fields maintenance when relevant
-- require action-log append
+- keep the writer focused on chapter draft / rewrite only
+- do not ask the writer to close summaries, review-log, or action-log
 - require the final completion line to be an exact nonce-bearing sentinel such as `WRITER_DONE chapter-05.md :: run={RUN_NONCE}`
 - after a valid start signal, do not send extra guidance while the writer is still visibly working; wait for that exact sentinel or a real timeout first
 
-### 3. Verify completion
+### 3. Verify writer completion
 
-Treat an episode as complete only when all are true:
+Treat writer completion as valid only when all are true:
 
 1. chapter file exists
-2. required summaries were updated
-3. `summaries/action-log.md` records the work
-4. `running-context.md` carries forward the immediate next-episode state
-5. `scripts/verify-writer-done.py --novel-dir <novel_dir> --episode <N>` passes when the repo provides it
+2. `### EPISODE_META` exists
+3. `scripts/verify-writer-done.py --novel-dir <novel_dir> --episode <N>` passes when the repo provides it
 
 If one is missing, do not advance blindly.
 
-### 4. Handle arc transitions
+### 4. Send post-write review
+
+After writer completion:
+
+- send the post-write review prompt to the review session
+- inject the `review_floor` there, not into the writer prompt
+- require `running-context.md`, `episode-log.md`, `character-tracker.md`, `review-log.md`, and `action-log.md`
+- wait for `REVIEW_DONE chapter-{NN} :: run={RUN_NONCE}` or the repo's rewrite/recheck sentinel
+- run `scripts/verify-review-done.py --novel-dir <novel_dir> --episode <N>` before advancing
+
+### 5. Handle repair loops
+
+If review finds a rewrite-class issue:
+
+- do not mark the episode complete
+- send a bounded repair batch back to the writer session
+- re-run writer gate
+- send a recheck prompt to the review session
+- only then accept `RECHECK_DONE` or `REVIEW_DONE`
+
+### 6. Handle arc transitions
 
 At arc boundaries, require:
 
@@ -100,7 +117,7 @@ At arc boundaries, require:
 - review-log and action-log updates
 - voice profile freshness handoff or explicit HOLD before the next arc starts
 
-### 5. Keep the pipeline Codex-only
+### 7. Keep the pipeline Codex-only
 
 Do not require external AI review.
 Use native MCP and direct file verification instead.
@@ -142,7 +159,7 @@ If the writer finished the last episode of an arc but stopped before the checkli
 
 ## Constraint
 
-The supervisor is an orchestrator, not the primary writer.
+The supervisor is an orchestrator, not the primary writer or primary reviewer.
 
 - It may inspect files and send prompts.
 - It should not silently rewrite large parts of the novel itself unless the user explicitly changes the task.
